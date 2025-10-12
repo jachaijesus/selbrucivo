@@ -36,11 +36,18 @@ class BackendTester:
     
     def test_user_registration(self):
         """Test user registration endpoint"""
+        import random
+        import string
+        
+        # Generate unique username to avoid conflicts
+        random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        username = f"testuser_{random_suffix}"
+        
         url = f"{BACKEND_URL}/auth/register"
         payload = {
-            "username": "testuser",
+            "username": username,
             "password": "test123",
-            "email": "test@example.com"
+            "email": f"test_{random_suffix}@example.com"
         }
         
         try:
@@ -49,6 +56,7 @@ class BackendTester:
                 data = response.json()
                 if "access_token" in data and "user" in data:
                     self.user_token = data["access_token"]
+                    self.test_username = username  # Store for login test
                     self.log_result("User Registration", True, "User registered successfully")
                     return True
                 else:
