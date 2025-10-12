@@ -217,11 +217,9 @@ class BackendTester:
             return False
             
         # Test with default timezone that user should have unlocked
-        # Use URL encoding for timezone with slash
-        import urllib.parse
+        # Now using normal format since we fixed the FastAPI route with :path
         timezone = "America/New_York"
-        encoded_timezone = urllib.parse.quote(timezone, safe='')
-        url = f"{BACKEND_URL}/wallpapers/archive/{encoded_timezone}"
+        url = f"{BACKEND_URL}/wallpapers/archive/{timezone}"
         headers = {"Authorization": f"Bearer {self.user_token}"}
         
         try:
