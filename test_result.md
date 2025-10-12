@@ -131,27 +131,33 @@ backend:
   
   - task: "Wallpaper APIs (Today/History/Archive)"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Wallpaper endpoints implemented. Need to test with actual data. Currently no wallpapers in DB."
+      - working: true
+        agent: "testing"
+        comment: "All wallpaper APIs tested successfully. Fixed FastAPI route issue with timezone parameter containing slash by using {timezone:path}. Today's wallpaper, history, and archive endpoints all working. Archive returns wallpapers for unlocked timezones."
   
   - task: "Class System APIs"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Class create and get APIs implemented. Need to test full flow."
+      - working: true
+        agent: "testing"
+        comment: "Class system APIs tested successfully. Class creation works with proper validation (user can only have 1 class). Get my class endpoint returns class details with member information."
   
   - task: "Global Metrics API"
     implemented: true
