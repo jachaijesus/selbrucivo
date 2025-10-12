@@ -123,9 +123,16 @@ class BackendTester:
     
     def test_admin_registration(self):
         """Test admin registration endpoint"""
+        import random
+        import string
+        
+        # Generate unique admin username to avoid conflicts
+        random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        admin_username = f"admin_{random_suffix}"
+        
         url = f"{BACKEND_URL}/admin/auth/register"
         payload = {
-            "username": "admin",
+            "username": admin_username,
             "password": "admin123"
         }
         
@@ -135,6 +142,7 @@ class BackendTester:
                 data = response.json()
                 if "access_token" in data:
                     self.admin_token = data["access_token"]
+                    self.test_admin_username = admin_username  # Store for login test
                     self.log_result("Admin Registration", True, "Admin registered successfully")
                     return True
                 else:
