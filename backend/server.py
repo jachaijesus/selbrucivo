@@ -270,7 +270,7 @@ async def get_wallpaper_history(payload: dict = Depends(verify_token)):
         for w in wallpapers
     ]
 
-@api_router.get("/wallpapers/archive/{timezone}")
+@api_router.get("/wallpapers/archive/{timezone:path}")
 async def get_timezone_archive(timezone: str, payload: dict = Depends(verify_token)):
     user = await db.users.find_one({"_id": payload["user_id"]})
     if not user:
