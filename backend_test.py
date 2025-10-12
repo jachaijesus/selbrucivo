@@ -156,9 +156,12 @@ class BackendTester:
     
     def test_admin_login(self):
         """Test admin login endpoint"""
+        # Use the admin username from registration if available, otherwise use default
+        admin_username = getattr(self, 'test_admin_username', 'admin')
+        
         url = f"{BACKEND_URL}/admin/auth/login"
         payload = {
-            "username": "admin",
+            "username": admin_username,
             "password": "admin123"
         }
         
