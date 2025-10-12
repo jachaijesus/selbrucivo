@@ -170,6 +170,45 @@ backend:
       - working: true
         agent: "main"
         comment: "Global metrics endpoint working. Returns user counts, device types, check-in stats."
+      - working: true
+        agent: "testing"
+        comment: "Global metrics API tested successfully. Public endpoint returns all expected fields: total_downloads, device_types, active_users, users_checking_in, completed_24h_checkins, total_wallpapers."
+  
+  - task: "Admin Wallpaper Management APIs"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Admin wallpaper upload and history APIs tested successfully. Upload requires admin auth and stores wallpapers with base64 images. History endpoint returns admin's upload history with metrics."
+  
+  - task: "Admin Application System APIs"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Admin application submit (public) and list (admin-only) APIs tested successfully. Submit endpoint accepts applications without auth, list endpoint requires admin authentication."
+  
+  - task: "Wallpaper Reaction API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Wallpaper reaction API tested successfully. Users can react to wallpapers with authentication. Reactions are stored with user_id, wallpaper_id, and reaction_type."
 
 frontend:
   - task: "Authentication Screens (Login/Register)"
