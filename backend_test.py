@@ -217,8 +217,11 @@ class BackendTester:
             return False
             
         # Test with default timezone that user should have unlocked
+        # Use URL encoding for timezone with slash
+        import urllib.parse
         timezone = "America/New_York"
-        url = f"{BACKEND_URL}/wallpapers/archive/{timezone}"
+        encoded_timezone = urllib.parse.quote(timezone, safe='')
+        url = f"{BACKEND_URL}/wallpapers/archive/{encoded_timezone}"
         headers = {"Authorization": f"Bearer {self.user_token}"}
         
         try:
