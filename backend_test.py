@@ -70,9 +70,12 @@ class BackendTester:
     
     def test_user_login(self):
         """Test user login endpoint"""
+        # Use the username from registration if available, otherwise use default
+        username = getattr(self, 'test_username', 'testuser')
+        
         url = f"{BACKEND_URL}/auth/login"
         payload = {
-            "username": "testuser",
+            "username": username,
             "password": "test123"
         }
         
