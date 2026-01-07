@@ -63,14 +63,8 @@ export default function AdminDashboardScreen() {
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'applications' && styles.tabActive]}
-            onPress={() => setActiveTab('applications')}
-          >
-            <Text style={[styles.tabText, activeTab === 'applications' && styles.tabTextActive]}>
-              Applications
-            </Text>
-          </TouchableOpacity>
+          {/* REMOVED: Applications tab - admin application system violates authority model */}
+          {/* Admins are assigned externally/manually, not through in-app applications */}
         </View>
       </View>
 
@@ -78,6 +72,9 @@ export default function AdminDashboardScreen() {
         {activeTab === 'upload' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Upload New Wallpaper</Text>
+            <Text style={styles.description}>
+              Curate daily inspiration for your assigned timezone
+            </Text>
             <View style={styles.uploadArea}>
               <Ionicons name="cloud-upload-outline" size={64} color="#444" />
               <Text style={styles.uploadText}>Tap to upload wallpaper</Text>
@@ -89,19 +86,12 @@ export default function AdminDashboardScreen() {
         {activeTab === 'history' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Upload History</Text>
+            <Text style={styles.description}>
+              View your curatorial archive
+            </Text>
             <View style={styles.emptyState}>
               <Ionicons name="time-outline" size={64} color="#444" />
               <Text style={styles.emptyText}>No uploads yet</Text>
-            </View>
-          </View>
-        )}
-
-        {activeTab === 'applications' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Admin Applications</Text>
-            <View style={styles.emptyState}>
-              <Ionicons name="document-text-outline" size={64} color="#444" />
-              <Text style={styles.emptyText}>No applications pending</Text>
             </View>
           </View>
         )}
@@ -164,7 +154,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#fff',
+    marginBottom: 8,
+  },
+  description: {
+    fontSize: 14,
+    color: '#888',
     marginBottom: 16,
+    fontStyle: 'italic',
   },
   uploadArea: {
     backgroundColor: '#1a1a1a',
