@@ -394,26 +394,33 @@ async def get_admin_upload_history(payload: dict = Depends(verify_token)):
 
 @api_router.get("/metrics/global")
 async def get_global_metrics():
+    """
+    Observational metrics endpoint - Non-interactive, anonymized global statistics
+    Designed for contemplative observation, not engagement tracking
+    """
     total_users = await db.users.count_documents({})
     total_wallpapers = await db.wallpapers.count_documents({})
-    active_checkins = await db.check_ins.count_documents({"status": "pending"})
-    completed_checkins = await db.check_ins.count_documents({"status": "completed"})
     
-    # Device type counts
+    # Passive validation metrics only
+    completed_checkins = await db.check_ins.count_documents({"status": "completed"})
+    total_classes = await db.classes.count_documents({})
+    
+    # Timezone distribution (observational, not real-time)
     users = await db.users.find({}).to_list(10000)
-    device_types = {}
+    timezone_distribution = {}
     for user in users:
-        if user.get("device_info"):
-            device_type = user["device_info"].get("type", "Unknown")
-            device_types[device_type] = device_types.get(device_type, 0) + 1
+        tz = user.get("current_timezone", "Unknown")
+        timezone_distribution[tz] = timezone_distribution.get(tz, 0) + 1
     
     return {
-        "total_downloads": total_users,
-        "device_types": device_types,
-        "active_users": total_users,
-        "users_checking_in": active_checkins,
+        "total_users": total_users,
+        "timezone_distribution": timezone_distribution,
         "completed_24h_checkins": completed_checkins,
-        "total_wallpapers": total_wallpapers
+        "total_classes": total_classes,
+        "total_wallpapers": total_wallpapers,
+        # Removed: device_types (engagement-oriented)
+        # Removed: active_users (real-time metric)
+        # Removed: users_checking_in (encourages polling)
     }
 
 # REMOVED: Admin application system violates authority model
