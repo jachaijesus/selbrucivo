@@ -416,43 +416,9 @@ async def get_global_metrics():
         "total_wallpapers": total_wallpapers
     }
 
-@api_router.post("/admin/applications/submit")
-async def submit_admin_application(application: AdminApplication):
-    app = {
-        "_id": str(ObjectId()),
-        "name": application.name,
-        "dob": application.dob,
-        "city": application.city,
-        "state": application.state,
-        "country": application.country,
-        "social_links": application.social_links,
-        "portfolio_links": application.portfolio_links,
-        "documents": application.documents,
-        "status": "pending",
-        "submitted_at": datetime.utcnow().isoformat(),
-        "reviewed_at": None
-    }
-    await db.admin_applications.insert_one(app)
-    return {"message": "Application submitted successfully", "application_id": app["_id"]}
-
-@api_router.get("/admin/applications/list")
-async def list_admin_applications(payload: dict = Depends(verify_token)):
-    if payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    applications = await db.admin_applications.find({}).to_list(1000)
-    return [
-        {
-            "id": app["_id"],
-            "name": app["name"],
-            "city": app["city"],
-            "state": app["state"],
-            "country": app["country"],
-            "status": app["status"],
-            "submitted_at": app["submitted_at"]
-        }
-        for app in applications
-    ]
+# REMOVED: Admin application system violates authority model
+# Admins are assigned externally/manually, not through in-app applications
+# Admin roles are curatorial positions, not user-accessible privileges
 
 # ============= CLASS ROUTES =============
 
