@@ -296,18 +296,8 @@ async def get_timezone_archive(timezone: str, payload: dict = Depends(verify_tok
         for w in wallpapers
     ]
 
-@api_router.post("/wallpapers/{wallpaper_id}/react")
-async def react_to_wallpaper(wallpaper_id: str, reaction_type: str, payload: dict = Depends(verify_token)):
-    # Store user reaction
-    reaction = {
-        "_id": str(ObjectId()),
-        "user_id": payload["user_id"],
-        "wallpaper_id": wallpaper_id,
-        "reaction_type": reaction_type,
-        "created_at": datetime.utcnow().isoformat()
-    }
-    await db.reactions.insert_one(reaction)
-    return {"message": "Reaction saved"}
+# REMOVED: Wallpaper reactions violate contemplative design
+# Wallpapers are curriculum artifacts, not engagement content
 
 # ============= ADMIN ROUTES =============
 
