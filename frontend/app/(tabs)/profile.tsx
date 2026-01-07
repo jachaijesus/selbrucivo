@@ -67,7 +67,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
             <Ionicons name="person-outline" size={20} color="#888" />
-            <Text style={styles.menuItemText}>Edit Profile</Text>
+            <Text style={styles.menuItemText}>Profile Settings</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#888" />
         </TouchableOpacity>
@@ -102,14 +102,9 @@ export default function ProfileScreen() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#888" />
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <Ionicons name="document-text-outline" size={20} color="#888" />
-            <Text style={styles.menuItemText}>Apply to be Admin</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#888" />
-        </TouchableOpacity>
+        
+        {/* REMOVED: Admin application system violates authority model */}
+        {/* Admin roles are assigned externally/manually */}
       </View>
 
       <View style={styles.section}>
