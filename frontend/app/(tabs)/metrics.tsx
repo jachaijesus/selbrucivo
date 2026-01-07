@@ -58,52 +58,58 @@ export default function MetricsScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Global Metrics</Text>
-        <Text style={styles.headerSubtitle}>Community statistics</Text>
+        <Text style={styles.headerTitle}>Observational Metrics</Text>
+        <Text style={styles.headerSubtitle}>Anonymous global statistics</Text>
       </View>
 
       <View style={styles.metricsGrid}>
         <MetricCard
-          icon="download-outline"
-          title="Total Downloads"
-          value={metrics?.total_downloads || 0}
+          icon="people-outline"
+          title="Total Users"
+          value={metrics?.total_users || 0}
           color="#6366f1"
         />
         <MetricCard
-          icon="people-outline"
-          title="Active Users"
-          value={metrics?.active_users || 0}
+          icon="images-outline"
+          title="Total Wallpapers"
+          value={metrics?.total_wallpapers || 0}
           color="#10b981"
-        />
-        <MetricCard
-          icon="location-outline"
-          title="Users Checking In"
-          value={metrics?.users_checking_in || 0}
-          color="#f59e0b"
         />
         <MetricCard
           icon="checkmark-circle-outline"
           title="24hr Check-ins"
           value={metrics?.completed_24h_checkins || 0}
+          color="#f59e0b"
+        />
+        <MetricCard
+          icon="grid-outline"
+          title="Total Classes"
+          value={metrics?.total_classes || 0}
           color="#ec4899"
         />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Device Types</Text>
-        <View style={styles.deviceList}>
-          {metrics?.device_types && Object.keys(metrics.device_types).length > 0 ? (
-            Object.entries(metrics.device_types).map(([type, count]: [string, any]) => (
-              <View key={type} style={styles.deviceItem}>
-                <Ionicons name="phone-portrait-outline" size={20} color="#888" />
-                <Text style={styles.deviceType}>{type}</Text>
-                <Text style={styles.deviceCount}>{count}</Text>
+        <Text style={styles.sectionTitle}>Timezone Distribution</Text>
+        <View style={styles.timezoneList}>
+          {metrics?.timezone_distribution && Object.keys(metrics.timezone_distribution).length > 0 ? (
+            Object.entries(metrics.timezone_distribution).map(([tz, count]: [string, any]) => (
+              <View key={tz} style={styles.timezoneItem}>
+                <Ionicons name="location-outline" size={20} color="#888" />
+                <Text style={styles.timezoneText}>{tz}</Text>
+                <Text style={styles.timezoneCount}>{count}</Text>
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>No device data yet</Text>
+            <Text style={styles.emptyText}>No timezone data yet</Text>
           )}
         </View>
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Metrics are observational only • No real-time updates
+        </Text>
       </View>
     </ScrollView>
   );
@@ -178,27 +184,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 16,
   },
-  deviceList: {
+  timezoneList: {
     backgroundColor: '#1a1a1a',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#2a2a2a',
   },
-  deviceItem: {
+  timezoneItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a2a',
   },
-  deviceType: {
+  timezoneText: {
     flex: 1,
     marginLeft: 12,
     fontSize: 14,
     color: '#fff',
   },
-  deviceCount: {
+  timezoneCount: {
     fontSize: 16,
     fontWeight: '600',
     color: '#6366f1',
@@ -208,5 +214,15 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     paddingVertical: 16,
+  },
+  footer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
