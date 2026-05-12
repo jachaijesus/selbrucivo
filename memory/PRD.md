@@ -50,6 +50,19 @@ A central design language extracted from the user's Phase 1 visual-direction boa
 - **Onboarding guild picker** uses roman numerals + serif labels (exhibition list).
 - **Library / Profile / Login / Register** all use editorial type hierarchy (serif italic display + mono catalog labels + sans body) and hairline rules.
 
+## Ceremonial Onboarding Walkthrough (Feb 2026)
+Seven-folio first-time-user experience replacing the prior two-step flow. Each folio is its own route with `fol. n / vii` catalog marks and slow `FadeIn` staggers.
+- **fol. i** — `/` Welcome (italic Garamond wordmark, "The Academia of Self.", "A living archive for Animation, Illustration, and Graphic Design.", ENTER CTA). Auto-redirects authed/onboarded users past it.
+- **fol. ii** — `/onboarding/philosophy` ("Observe slowly. Contribute intentionally. Browse ambiently." in coral italic; manifesto body)
+- **fol. iii** — `/onboarding/guild` (roman-numeral exhibition list, coral selection underline; guild stored locally)
+- **fol. iv** — `/onboarding/place` (allow-location + manual city/region/country; submits `/api/auth/onboarding`)
+- **fol. v** — `/onboarding/ceremony` (coral museum placard: "You are now connected to ⟨Guild⟩ ⟨City, Country⟩")
+- **fol. vi** — `/onboarding/ambient` (live preview window with drifting crossfade between the user's local works + 3 em-dash explanations)
+- **fol. vii** — `/onboarding/contribute` (two equal CTAs: Inscribe / Browse — contribution is welcomed, never demanded)
+- Final transition into `/(tabs)/ambient`.
+
+Routing: register/login with `onboarded=false` → `/onboarding` (router gate) → philosophy. Hard-refresh resilience: gate checks `auth/me` and forwards onboarded users to ambient.
+
 ## Verified
 - Backend pytest: 34/34 pass (auth, onboarding, admin, portrait validation, feed scopes, moderation round-trip, metrics, absence of engagement endpoints)
 - Multi-user Boston onboarding: member_count correctly increments to 2, guild_counts split correctly
