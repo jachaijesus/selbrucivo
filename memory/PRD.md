@@ -50,6 +50,16 @@ A central design language extracted from the user's Phase 1 visual-direction boa
 - **Onboarding guild picker** uses roman numerals + serif labels (exhibition list).
 - **Library / Profile / Login / Register** all use editorial type hierarchy (serif italic display + mono catalog labels + sans body) and hairline rules.
 
+## Exhibition Encounter — Single Artwork (Feb 2026)
+Detail screen at `/artwork/[id]` rendered as a gallery placard rather than a social post page.
+- **Plate** fills the viewport with `contentFit: contain` (letterboxed when needed) so the work is presented as itself, not cropped.
+- **Top frame**: mono caps `← Return` and a catalog number `№ XXXXXX` derived from the artwork id.
+- **Whisper at the foot of the plate**: `scroll for placard` + hairline (auto-fades with chrome).
+- **Placard** scrolls into view below: coral mono catalog tag (`I. ILLUSTRATOR · № …`), Garamond italic title at 44pt, italic creator attribution, hairline rule, then a structured metadata table (Guild · Local Library · Acquired · Dimensions · Status), optional italic Note, mono tag pills, and a colophon (`Inscribed in the Selbrucivo archive · vol. i`).
+- **Chrome recedes** after 4s of stillness for pure viewing.
+- **Entry points**: tap "open placard ▸" inside Ambient overlay; tap any inscription row in Profile.
+- **No engagement affordances** — no like, save, share, comment, related works, or recommendations.
+
 ## Ceremonial Onboarding Walkthrough (Feb 2026)
 Seven-folio first-time-user experience replacing the prior two-step flow. Each folio is its own route with `fol. n / vii` catalog marks and slow `FadeIn` staggers.
 - **fol. i** — `/` Welcome (italic Garamond wordmark, "The Academia of Self.", "A living archive for Animation, Illustration, and Graphic Design.", ENTER CTA). Auto-redirects authed/onboarded users past it.
@@ -78,8 +88,6 @@ Routing: register/login with `onboarded=false` → `/onboarding` (router gate) �
 
 ## Backlog (P1+)
 - Archive grid view (browse approved works by guild / time)
-- Creator attribution page (works grouped by creator_name within a library)
-- Single-artwork detail screen with metadata
 - Library directory browser (list other cities, view global ones)
 - Native upload (expo-image-picker / expo-document-picker) — current upload is web-file-input only
 - Object storage migration (e.g., Emergent-managed) once base64 strains MongoDB

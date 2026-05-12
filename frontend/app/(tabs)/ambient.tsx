@@ -118,6 +118,14 @@ export default function Ambient() {
               <Text style={s.metaTitle} numberOfLines={2}>{item.title}</Text>
               <Text style={s.metaCreator}>{item.creator_name}</Text>
               <Text style={s.metaCity}>{item.city}{item.region ? `,  ${item.region}` : ''}{item.country ? `  ·  ${item.country}` : ''}</Text>
+              <Pressable
+                testID={`open-placard-${item.id}`}
+                onPress={(e) => { e.stopPropagation?.(); router.push(`/artwork/${item.id}` as any); }}
+                style={s.placardLink}
+                hitSlop={10}
+              >
+                <Text style={s.placardLinkText}>open placard ▸</Text>
+              </Pressable>
             </Fader>
           </Pressable>
         )}
@@ -165,6 +173,8 @@ const s = StyleSheet.create({
   metaTitle: { fontFamily: fonts.display, color: palette.paper, fontSize: 32, lineHeight: 36, marginTop: space.s, letterSpacing: -0.3 },
   metaCreator: { fontFamily: fonts.display, fontStyle: 'italic', color: palette.parchment, fontSize: 15, marginTop: space.s },
   metaCity: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 3, color: palette.gunsmoke, textTransform: 'uppercase', marginTop: space.m },
+  placardLink: { marginTop: space.base, alignSelf: 'flex-start', paddingVertical: 4, paddingRight: 12 },
+  placardLinkText: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 3, color: palette.coral, textTransform: 'uppercase' },
   topBar: { position: 'absolute', top: 48, left: 0, right: 0, paddingHorizontal: space.l },
   brandRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brand: { fontFamily: fonts.display, fontSize: 16, color: palette.paper, fontStyle: 'italic', letterSpacing: 0.5 },

@@ -61,7 +61,12 @@ export default function Profile() {
           {mine.length === 0 ? (
             <Text style={s.empty}>No inscriptions yet.</Text>
           ) : mine.map((a) => (
-            <View key={a.id} style={s.row} testID={`profile-artwork-${a.id}`}>
+            <Pressable
+              key={a.id}
+              style={s.row}
+              testID={`profile-artwork-${a.id}`}
+              onPress={() => router.push(`/artwork/${a.id}` as any)}
+            >
               <View style={{ flex: 1 }}>
                 <Text style={s.rowTitle}>{a.title}</Text>
                 <Text style={s.rowMeta}>{a.uploaded_at?.slice(0, 10)}</Text>
@@ -70,7 +75,7 @@ export default function Profile() {
               <Text style={[s.statusTag, a.status === 'approved' && s.statusApproved, a.status === 'pending' && s.statusPending, a.status === 'rejected' && s.statusRejected]}>
                 {a.status}
               </Text>
-            </View>
+            </Pressable>
           ))}
         </View>
 
