@@ -3,6 +3,8 @@ import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Pla
 import { useRouter, Link } from 'expo-router';
 import { storage } from '../../utils/storage';
 import { api } from '../../utils/api';
+import { palette, type, space, fonts } from '../../theme';
+import { FadeIn } from '../../utils/motion';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -11,86 +13,87 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
-    if (!username || !password) {
-      Alert.alert('Required', 'Please enter username and password');
-      return;
-    }
+    if (!username || !password) return Alert.alert('Required', 'Please enter username and password');
     setLoading(true);
     try {
       const data = await api.post('/api/auth/login', { username, password });
       await storage.setItem('auth_token', data.access_token);
       await storage.setItem('user', JSON.stringify(data.user));
-      if (data.user.onboarded) router.replace('/(tabs)/ambient');
-      else router.replace('/onboarding');
+      router.replace(data.user.onboarded ? '/(tabs)/ambient' : '/onboarding');
     } catch (e: any) {
       Alert.alert('Could not enter', e?.response?.data?.detail || 'Invalid credentials');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
-      <View style={styles.inner}>
-        <Text style={styles.brand} testID="login-title">selbrucivo</Text>
-        <Text style={styles.tagline}>the academia of self</Text>
-        <View style={styles.divider} />
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.root}>
+      <View style={s.inner}>
+        <FadeIn duration={600}>
+          <Text style={s.catalogTop}>est. mmxxvi · vol. i</Text>
+          <Text style={s.brand}>selbrucivo</Text>
+          <Text style={s.tagline}>the academia of self</Text>
+          <View style={s.rule} />
+        </FadeIn>
 
-        <Text style={styles.label}>Identifier</Text>
-        <TextInput
-          testID="login-username-input"
-          style={styles.input}
-          value={username}
-          onChangeText={setUsername}
-          autoCapitalize="none"
-          placeholder="username"
-          placeholderTextColor="#4a4738"
-        />
+        <FadeIn duration={600} delay={120}>
+          <Text style={s.label}>Identifier</Text>
+          <TextInput
+            testID="login-username-input"
+            style={s.input}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            placeholder="username"
+            placeholderTextColor={palette.faint}
+          />
 
-        <Text style={styles.label}>Passphrase</Text>
-        <TextInput
-          testID="login-password-input"
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="••••••••"
-          placeholderTextColor="#4a4738"
-        />
+          <Text style={s.label}>Passphrase</Text>
+          <TextInput
+            testID="login-password-input"
+            style={s.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="••••••••"
+            placeholderTextColor={palette.faint}
+          />
 
-        <Pressable testID="login-submit-button" style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]} onPress={submit} disabled={loading}>
-          {loading ? <ActivityIndicator color="#0a0a0c" /> : <Text style={styles.ctaText}>Enter the archive</Text>}
-        </Pressable>
-
-        <Link href="/auth/register" asChild>
-          <Pressable testID="login-go-register" style={styles.link}>
-            <Text style={styles.linkText}>No record yet · inscribe me</Text>
+          <Pressable testID="login-submit-button" style={({ pressed }) => [s.cta, pressed && s.ctaPressed]} onPress={submit} disabled={loading}>
+            {loading ? <ActivityIndicator color={palette.ink} /> : <Text style={s.ctaText}>Enter the archive</Text>}
           </Pressable>
-        </Link>
 
-        <Link href="/admin/login" asChild>
-          <Pressable testID="login-go-admin" style={styles.adminLink}>
-            <Text style={styles.adminLinkText}>Curator portal</Text>
-          </Pressable>
-        </Link>
+          <Link href="/auth/register" asChild>
+            <Pressable testID="login-go-register" style={s.link}>
+              <Text style={s.linkText}>No record yet · <Text style={s.linkAccent}>inscribe me</Text></Text>
+            </Pressable>
+          </Link>
+
+          <Link href="/admin/login" asChild>
+            <Pressable testID="login-go-admin" style={s.adminLink}>
+              <Text style={s.adminLinkText}>Curator portal</Text>
+            </Pressable>
+          </Link>
+        </FadeIn>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0a0c' },
-  inner: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
-  brand: { fontSize: 30, letterSpacing: 6, color: '#f3ecd9', fontWeight: '300' },
-  tagline: { fontSize: 10, letterSpacing: 4, color: '#7a7568', marginTop: 6, textTransform: 'uppercase' },
-  divider: { height: 1, backgroundColor: '#1f1e1a', marginVertical: 36, width: 64 },
-  label: { fontSize: 10, letterSpacing: 3, color: '#6e6a5e', textTransform: 'uppercase', marginBottom: 8, marginTop: 18 },
-  input: { backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: '#2a2820', color: '#f3ecd9', fontSize: 16, paddingVertical: 12 },
-  cta: { marginTop: 40, backgroundColor: '#d6c9a8', height: 52, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
-  ctaPressed: { backgroundColor: '#c2b58f' },
-  ctaText: { color: '#0a0a0c', letterSpacing: 3, fontSize: 12, textTransform: 'uppercase', fontWeight: '600' },
-  link: { marginTop: 28, alignItems: 'center' },
-  linkText: { color: '#7a7568', fontSize: 12, letterSpacing: 1 },
-  adminLink: { marginTop: 16, alignItems: 'center' },
-  adminLinkText: { color: '#4a4738', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase' },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: palette.ink },
+  inner: { flex: 1, paddingHorizontal: space.xl, justifyContent: 'center', maxWidth: 480, alignSelf: 'stretch', width: '100%' },
+  catalogTop: { ...type.catalog },
+  brand: { ...type.displayL, color: palette.paper, fontStyle: 'italic', marginTop: space.s },
+  tagline: { ...type.body, color: palette.dim, marginTop: space.s, fontFamily: fonts.display, fontStyle: 'italic', fontSize: 16 },
+  rule: { height: 1, backgroundColor: palette.rule, marginVertical: space.xl, width: 64 },
+  label: { ...type.label, marginBottom: space.s, marginTop: space.base },
+  input: { borderBottomWidth: 1, borderBottomColor: palette.rule, color: palette.paper, fontSize: 16, paddingVertical: space.m, fontFamily: fonts.sans },
+  cta: { marginTop: space.xl, backgroundColor: palette.paper, height: 52, alignItems: 'center', justifyContent: 'center' },
+  ctaPressed: { backgroundColor: palette.parchment },
+  ctaText: { ...type.label, color: palette.ink, fontWeight: '600', fontSize: 11 },
+  link: { marginTop: space.xl, alignItems: 'center' },
+  linkText: { color: palette.dim, fontSize: 13, fontFamily: fonts.sans },
+  linkAccent: { color: palette.coral, fontFamily: fonts.display, fontStyle: 'italic' },
+  adminLink: { marginTop: space.base, alignItems: 'center' },
+  adminLinkText: { ...type.catalog, fontSize: 9 },
 });

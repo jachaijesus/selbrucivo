@@ -1,27 +1,19 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api } from '../../utils/api';
+import { palette, type, space, fonts } from '../../theme';
+import { FadeIn } from '../../utils/motion';
 
 type Lib = {
-  id: string;
-  city: string;
-  region: string;
-  country: string;
+  id: string; city: string; region: string; country: string;
   member_count: number;
   guild_counts: { illustrator: number; animator: number; designer: number };
   is_global: boolean;
   global_thresholds: { total: number; per_guild: number };
   approved_artwork_count?: number;
 };
-
-type Metrics = {
-  total_members: number;
-  total_local_libraries: number;
-  global_libraries: number;
-  approved_artworks: number;
-  guild_distribution: { illustrator: number; animator: number; designer: number };
-};
+type Metrics = { total_members: number; total_local_libraries: number; global_libraries: number; approved_artworks: number; guild_distribution: any };
 
 export default function Library() {
   const [lib, setLib] = useState<Lib | null>(null);
@@ -32,74 +24,65 @@ export default function Library() {
     setLoading(true);
     try {
       const [l, m] = await Promise.all([api.get<Lib>('/api/library/me'), api.get<Metrics>('/api/metrics/global')]);
-      setLib(l);
-      setMetrics(m);
-    } catch {
-      setLib(null);
-    } finally {
-      setLoading(false);
-    }
+      setLib(l); setMetrics(m);
+    } catch { setLib(null); }
+    finally { setLoading(false); }
   }, []);
-
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading) {
-    return (
-      <View style={[s.root, s.center]}><ActivityIndicator color="#d6c9a8" /></View>
-    );
-  }
-  if (!lib) {
-    return <View style={[s.root, s.center]}><Text style={s.empty}>No library record.</Text></View>;
-  }
+  if (loading) return <View style={[s.root, s.center]}><ActivityIndicator color={palette.parchment} /></View>;
+  if (!lib) return <View style={[s.root, s.center]}><Text style={s.empty}>No library record.</Text></View>;
 
-  const progressTotal = Math.min(1, lib.member_count / lib.global_thresholds.total);
-  const progressIll = Math.min(1, lib.guild_counts.illustrator / lib.global_thresholds.per_guild);
-  const progressAnim = Math.min(1, lib.guild_counts.animator / lib.global_thresholds.per_guild);
-  const progressDes = Math.min(1, lib.guild_counts.designer / lib.global_thresholds.per_guild);
+  const pTot = Math.min(1, lib.member_count / lib.global_thresholds.total);
+  const pI = Math.min(1, lib.guild_counts.illustrator / lib.global_thresholds.per_guild);
+  const pA = Math.min(1, lib.guild_counts.animator / lib.global_thresholds.per_guild);
+  const pD = Math.min(1, lib.guild_counts.designer / lib.global_thresholds.per_guild);
 
   return (
     <ScrollView style={s.root} contentContainerStyle={s.scroll} testID="library-screen">
-      <Text style={s.eyebrow}>local library</Text>
-      <Text style={s.city}>{lib.city}</Text>
-      <Text style={s.subloc}>{lib.region ? `${lib.region} · ` : ''}{lib.country}</Text>
-      <View style={s.rule} />
+      <FadeIn>
+        <Text style={s.catalog}>local library · fol. {lib.is_global ? 'iv' : 'ii'}</Text>
+        <Text style={s.city}>{lib.city}</Text>
+        <Text style={s.subloc}>{[lib.region, lib.country].filter(Boolean).join(' · ').toUpperCase()}</Text>
+        <View style={s.rule} />
+      </FadeIn>
 
-      <View style={s.statusRow}>
-        <View style={[s.statusBadge, lib.is_global && s.statusBadgeGlobal]} testID="library-status-badge">
-          <Text style={[s.statusText, lib.is_global && s.statusTextGlobal]}>
-            {lib.is_global ? '◉ global' : '○ local'}
-          </Text>
-        </View>
-        <Text style={s.approved}>{lib.approved_artwork_count ?? 0} works archived</Text>
-      </View>
-
-      <Text style={s.section}>Membership</Text>
-      <View style={s.statGrid}>
-        <Stat label="Members" value={lib.member_count} />
-        <Stat label="Illustrators" value={lib.guild_counts.illustrator} />
-        <Stat label="Animators" value={lib.guild_counts.animator} />
-        <Stat label="Designers" value={lib.guild_counts.designer} />
-      </View>
-
-      <Text style={s.section}>Path to global archive</Text>
-      <Text style={s.helper}>3,000 members across the three guilds—1,000 of each—unlocks cross-regional visibility.</Text>
-
-      <ProgressLine label={`Total ${lib.member_count} / ${lib.global_thresholds.total}`} value={progressTotal} />
-      <ProgressLine label={`Illustrators ${lib.guild_counts.illustrator} / ${lib.global_thresholds.per_guild}`} value={progressIll} />
-      <ProgressLine label={`Animators ${lib.guild_counts.animator} / ${lib.global_thresholds.per_guild}`} value={progressAnim} />
-      <ProgressLine label={`Designers ${lib.guild_counts.designer} / ${lib.global_thresholds.per_guild}`} value={progressDes} />
-
-      {metrics && (
-        <>
-          <Text style={[s.section, { marginTop: 36 }]}>Network</Text>
-          <View style={s.statGrid}>
-            <Stat label="Local libraries" value={metrics.total_local_libraries} />
-            <Stat label="Global libraries" value={metrics.global_libraries} />
-            <Stat label="Archived works" value={metrics.approved_artworks} />
-            <Stat label="Total members" value={metrics.total_members} />
+      <FadeIn delay={120}>
+        <View style={s.statusRow}>
+          <View style={[s.badge, lib.is_global && s.badgeGlobal]} testID="library-status-badge">
+            <Text style={[s.badgeText, lib.is_global && s.badgeTextGlobal]}>{lib.is_global ? '◉  global' : '○  local'}</Text>
           </View>
-        </>
-      )}
+          <Text style={s.archivedCount}>{lib.approved_artwork_count ?? 0} works archived</Text>
+        </View>
+
+        <Text style={s.section}>Membership</Text>
+        <View style={s.statGrid}>
+          <Stat label="Members" value={lib.member_count} />
+          <Stat label="Illustrators" value={lib.guild_counts.illustrator} />
+          <Stat label="Animators" value={lib.guild_counts.animator} />
+          <Stat label="Designers" value={lib.guild_counts.designer} />
+        </View>
+
+        <Text style={s.section}>Path to global archive</Text>
+        <Text style={s.helper}>Three thousand members. One thousand of each guild. Then the local library joins the network.</Text>
+
+        <ProgressLine label="total" current={lib.member_count} target={lib.global_thresholds.total} value={pTot} />
+        <ProgressLine label="illustrators" current={lib.guild_counts.illustrator} target={lib.global_thresholds.per_guild} value={pI} />
+        <ProgressLine label="animators" current={lib.guild_counts.animator} target={lib.global_thresholds.per_guild} value={pA} />
+        <ProgressLine label="designers" current={lib.guild_counts.designer} target={lib.global_thresholds.per_guild} value={pD} />
+
+        {metrics && (
+          <>
+            <Text style={s.section}>The network</Text>
+            <View style={s.statGrid}>
+              <Stat label="Local libraries" value={metrics.total_local_libraries} />
+              <Stat label="Global libraries" value={metrics.global_libraries} />
+              <Stat label="Archived works" value={metrics.approved_artworks} />
+              <Stat label="Total members" value={metrics.total_members} />
+            </View>
+          </>
+        )}
+      </FadeIn>
     </ScrollView>
   );
 }
@@ -113,38 +96,42 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ProgressLine({ label, value }: { label: string; value: number }) {
+function ProgressLine({ label, current, target, value }: { label: string; current: number; target: number; value: number }) {
   return (
     <View style={s.progWrap}>
-      <Text style={s.progLabel}>{label}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={s.progLabel}>{label}</Text>
+        <Text style={s.progNum}>{current} / {target}</Text>
+      </View>
       <View style={s.progTrack}><View style={[s.progFill, { width: `${value * 100}%` }]} /></View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0a0c' },
-  scroll: { paddingHorizontal: 28, paddingTop: 80, paddingBottom: 120 },
+  root: { flex: 1, backgroundColor: palette.ink },
+  scroll: { paddingHorizontal: space.xl, paddingTop: 80, paddingBottom: 120 },
   center: { alignItems: 'center', justifyContent: 'center' },
-  empty: { color: '#7a7568' },
-  eyebrow: { color: '#6e6a5e', fontSize: 10, letterSpacing: 4, textTransform: 'uppercase' },
-  city: { color: '#f3ecd9', fontSize: 40, fontWeight: '300', marginTop: 8 },
-  subloc: { color: '#7a7568', fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', marginTop: 4 },
-  rule: { height: 1, backgroundColor: '#1f1e1a', width: 64, marginVertical: 28 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#2a2820', borderRadius: 999 },
-  statusBadgeGlobal: { backgroundColor: '#d6c9a8', borderColor: '#d6c9a8' },
-  statusText: { color: '#7a7568', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase' },
-  statusTextGlobal: { color: '#0a0a0c', fontWeight: '600' },
-  approved: { color: '#9c978a', fontSize: 12 },
-  section: { color: '#d6c9a8', fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', marginTop: 36, marginBottom: 14 },
-  helper: { color: '#7a7568', fontSize: 13, lineHeight: 20, marginBottom: 18 },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  stat: { flexBasis: '47%', padding: 18, borderWidth: 1, borderColor: '#1f1e1a', borderRadius: 2 },
-  statValue: { color: '#f3ecd9', fontSize: 26, fontWeight: '300' },
-  statLabel: { color: '#6e6a5e', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 },
-  progWrap: { marginBottom: 14 },
-  progLabel: { color: '#9c978a', fontSize: 11, letterSpacing: 1, marginBottom: 6 },
-  progTrack: { height: 2, backgroundColor: '#1f1e1a', borderRadius: 1 },
-  progFill: { height: 2, backgroundColor: '#d6c9a8', borderRadius: 1 },
+  empty: { color: palette.dim },
+  catalog: { ...type.catalog },
+  city: { fontFamily: fonts.display, color: palette.paper, fontSize: 52, fontStyle: 'italic', marginTop: space.s, letterSpacing: -0.8, lineHeight: 56 },
+  subloc: { fontFamily: fonts.mono, color: palette.gunsmoke, fontSize: 10, letterSpacing: 3, marginTop: space.xs },
+  rule: { height: 1, backgroundColor: palette.rule, width: 64, marginVertical: space.l },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.l },
+  badge: { paddingHorizontal: space.m, paddingVertical: 5, borderWidth: 1, borderColor: palette.rule },
+  badgeGlobal: { backgroundColor: palette.coral, borderColor: palette.coral },
+  badgeText: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: palette.dim, textTransform: 'uppercase' },
+  badgeTextGlobal: { color: palette.paper },
+  archivedCount: { fontFamily: fonts.display, fontStyle: 'italic', color: palette.parchment, fontSize: 14 },
+  section: { ...type.label, marginTop: space.xl, marginBottom: space.m, color: palette.parchment, fontSize: 11 },
+  helper: { fontFamily: fonts.display, fontStyle: 'italic', color: palette.dim, fontSize: 14, lineHeight: 22, marginBottom: space.base },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.m },
+  stat: { flexBasis: '47%', paddingVertical: space.base, borderTopWidth: 1, borderTopColor: palette.rule },
+  statValue: { fontFamily: fonts.display, fontSize: 30, color: palette.paper, fontStyle: 'italic' },
+  statLabel: { fontFamily: fonts.mono, color: palette.dim, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', marginTop: space.xs },
+  progWrap: { marginBottom: space.base },
+  progLabel: { fontFamily: fonts.mono, color: palette.parchment, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  progNum: { fontFamily: fonts.mono, color: palette.dim, fontSize: 10, letterSpacing: 1 },
+  progTrack: { height: 1, backgroundColor: palette.rule, marginTop: space.s },
+  progFill: { height: 1, backgroundColor: palette.coral },
 });

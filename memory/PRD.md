@@ -40,6 +40,16 @@ Selbrucivo is a **location-based creative library** for **Animation, Illustratio
 - ✅ Seed script: testuser/password123 in Tampa with 8 approved + 1 pending artwork
 - ✅ Fixed critical bug: `ensure_local_library` was stripping `_id` for existing libraries; repeat onboarders ended up with `library_id=None`. Now returns the full doc with `id` populated.
 
+## Visual Language System (Feb 2026)
+A central design language extracted from the user's Phase 1 visual-direction board:
+- **Tokens**: `/app/frontend/theme.ts` — palette (ink, paper, parchment, coral accent, gunsmoke), type scale (display serif + sans + mono catalog labels), 9-step spacing.
+- **Web fonts**: `/app/frontend/app/+html.tsx` injects Google Fonts (EB Garamond, DM Sans, JetBrains Mono).
+- **Motion**: `/app/frontend/utils/motion.tsx` — `FadeIn` (atmospheric entrance), `Fader` (controlled opacity for the ambient overlay).
+- **Ambient Mode** overlay now auto-fades after 4s and re-reveals on tap (cinematic viewing environment, not feed).
+- **Ceremony** screen is a coral editorial placard (museum acquisition card).
+- **Onboarding guild picker** uses roman numerals + serif labels (exhibition list).
+- **Library / Profile / Login / Register** all use editorial type hierarchy (serif italic display + mono catalog labels + sans body) and hairline rules.
+
 ## Verified
 - Backend pytest: 34/34 pass (auth, onboarding, admin, portrait validation, feed scopes, moderation round-trip, metrics, absence of engagement endpoints)
 - Multi-user Boston onboarding: member_count correctly increments to 2, guild_counts split correctly
