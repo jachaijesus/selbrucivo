@@ -1,57 +1,44 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storage } from '../utils/storage';
+import { api } from '../utils/api';
 
 export default function Index() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const token = await AsyncStorage.getItem('auth_token');
-      if (token) {
-        // User is logged in, navigate to main app
-        router.replace('/(tabs)/home');
-      } else {
-        // User not logged in, navigate to auth
+    (async () => {
+      const token = await storage.getItem('auth_token');
+      if (!token) {
+        router.replace('/auth/login');
+        return;
+      }
+      try {
+        const me = await api.get('/api/auth/me');
+        if (!me.onboarded) {
+          router.replace('/onboarding');
+        } else {
+          router.replace('/(tabs)/ambient');
+        }
+      } catch {
+        await storage.removeItem('auth_token');
         router.replace('/auth/login');
       }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      router.replace('/auth/login');
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+  }, []);
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#6366f1" />
-        <Text style={styles.loadingText}>Selbrucivo</Text>
-      </View>
-    );
-  }
-
-  return null;
+  return (
+    <View style={styles.container} testID="splash-screen">
+      <Text style={styles.brand}>selbrucivo</Text>
+      <Text style={styles.sub}>the academia of self</Text>
+      <ActivityIndicator color="#d6c9a8" style={{ marginTop: 32 }} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0c0c0c',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
+  container: { flex: 1, backgroundColor: '#0a0a0c', alignItems: 'center', justifyContent: 'center' },
+  brand: { fontSize: 28, letterSpacing: 6, color: '#f3ecd9', fontWeight: '300' },
+  sub: { fontSize: 11, letterSpacing: 4, color: '#7a7568', marginTop: 12, textTransform: 'uppercase' },
 });

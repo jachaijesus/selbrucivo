@@ -1,198 +1,66 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { useRouter, Link } from 'expo-router';
+import { storage } from '../../utils/storage';
+import { api } from '../../utils/api';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-export default function AdminLoginScreen() {
+export default function AdminLogin() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
-    if (!username || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
+  const submit = async () => {
+    if (!username || !password) return Alert.alert('Required', 'Enter credentials');
     setLoading(true);
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/admin/auth/login`, {
-        username,
-        password,
-      });
-
-      const { access_token, admin } = response.data;
-      await AsyncStorage.setItem('admin_token', access_token);
-      await AsyncStorage.setItem('admin', JSON.stringify(admin));
-
+      const data = await api.post('/api/admin/auth/login', { username, password });
+      await storage.setItem('admin_token', data.access_token);
+      await storage.setItem('admin', JSON.stringify(data.admin));
       router.replace('/admin/dashboard');
-    } catch (error: any) {
-      Alert.alert(
-        'Login Failed',
-        error.response?.data?.detail || 'Invalid credentials'
-      );
+    } catch (e: any) {
+      Alert.alert('Denied', e?.response?.data?.detail || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.root}>
+      <View style={s.inner}>
+        <Text style={s.eyebrow}>curator portal</Text>
+        <Text style={s.title}>archive review</Text>
+        <View style={s.rule} />
 
-        <View style={styles.header}>
-          <Ionicons name="shield-checkmark" size={64} color="#6366f1" />
-          <Text style={styles.title}>Admin Portal</Text>
-          <Text style={styles.subtitle}>Manage wallpapers & applications</Text>
-        </View>
+        <Text style={s.label}>Curator identifier</Text>
+        <TextInput testID="admin-username" style={s.input} value={username} onChangeText={setUsername} autoCapitalize="none" placeholder="admin" placeholderTextColor="#4a4738" />
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Admin Username"
-              placeholderTextColor="#666"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-          </View>
+        <Text style={s.label}>Passphrase</Text>
+        <TextInput testID="admin-password" style={s.input} value={password} onChangeText={setPassword} secureTextEntry placeholderTextColor="#4a4738" />
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#666"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeIcon}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                size={20}
-                color="#666"
-              />
-            </TouchableOpacity>
-          </View>
+        <Pressable testID="admin-submit" onPress={submit} style={({ pressed }) => [s.cta, pressed && s.ctaPressed]} disabled={loading}>
+          {loading ? <ActivityIndicator color="#0a0a0c" /> : <Text style={s.ctaText}>Enter</Text>}
+        </Pressable>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Login as Admin</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <Link href="/auth/login" asChild>
+          <Pressable style={s.back}><Text style={s.backText}>← back to archive</Text></Pressable>
+        </Link>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0c0c0c',
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 48,
-    left: 24,
-    zIndex: 1,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#888',
-  },
-  form: {
-    width: '100%',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    height: 56,
-    color: '#ffffff',
-    fontSize: 16,
-  },
-  eyeIcon: {
-    padding: 8,
-  },
-  button: {
-    backgroundColor: '#6366f1',
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#0a0a0c' },
+  inner: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
+  eyebrow: { color: '#6e6a5e', fontSize: 10, letterSpacing: 4, textTransform: 'uppercase' },
+  title: { color: '#f3ecd9', fontSize: 30, fontWeight: '300', marginTop: 8, letterSpacing: -0.5 },
+  rule: { height: 1, backgroundColor: '#1f1e1a', width: 64, marginVertical: 24 },
+  label: { color: '#6e6a5e', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  input: { borderBottomWidth: 1, borderBottomColor: '#2a2820', color: '#f3ecd9', fontSize: 15, paddingVertical: 12 },
+  cta: { marginTop: 32, backgroundColor: '#d6c9a8', height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 2 },
+  ctaPressed: { backgroundColor: '#c2b58f' },
+  ctaText: { color: '#0a0a0c', fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', fontWeight: '600' },
+  back: { marginTop: 24, alignItems: 'center' },
+  backText: { color: '#7a7568', fontSize: 12 },
 });

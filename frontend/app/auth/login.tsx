@@ -1,199 +1,96 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { Ionicons } from '@expo/vector-icons';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { useRouter, Link } from 'expo-router';
+import { storage } from '../../utils/storage';
+import { api } from '../../utils/api';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
+  const submit = async () => {
     if (!username || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('Required', 'Please enter username and password');
       return;
     }
-
     setLoading(true);
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/auth/login`, {
-        username,
-        password,
-      });
-
-      const { access_token, user } = response.data;
-      await AsyncStorage.setItem('auth_token', access_token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-
-      router.replace('/(tabs)/home');
-    } catch (error: any) {
-      Alert.alert(
-        'Login Failed',
-        error.response?.data?.detail || 'Invalid username or password'
-      );
+      const data = await api.post('/api/auth/login', { username, password });
+      await storage.setItem('auth_token', data.access_token);
+      await storage.setItem('user', JSON.stringify(data.user));
+      if (data.user.onboarded) router.replace('/(tabs)/ambient');
+      else router.replace('/onboarding');
+    } catch (e: any) {
+      Alert.alert('Could not enter', e?.response?.data?.detail || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Selbrucivo</Text>
-          <Text style={styles.subtitle}>Academia of Self</Text>
-        </View>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
+      <View style={styles.inner}>
+        <Text style={styles.brand} testID="login-title">selbrucivo</Text>
+        <Text style={styles.tagline}>the academia of self</Text>
+        <View style={styles.divider} />
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor="#666"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-          </View>
+        <Text style={styles.label}>Identifier</Text>
+        <TextInput
+          testID="login-username-input"
+          style={styles.input}
+          value={username}
+          onChangeText={setUsername}
+          autoCapitalize="none"
+          placeholder="username"
+          placeholderTextColor="#4a4738"
+        />
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#666"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeIcon}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                size={20}
-                color="#666"
-              />
-            </TouchableOpacity>
-          </View>
+        <Text style={styles.label}>Passphrase</Text>
+        <TextInput
+          testID="login-password-input"
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholder="••••••••"
+          placeholderTextColor="#4a4738"
+        />
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Login</Text>
-            )}
-          </TouchableOpacity>
+        <Pressable testID="login-submit-button" style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]} onPress={submit} disabled={loading}>
+          {loading ? <ActivityIndicator color="#0a0a0c" /> : <Text style={styles.ctaText}>Enter the archive</Text>}
+        </Pressable>
 
-          <TouchableOpacity
-            onPress={() => router.push('/auth/register')}
-            style={styles.linkButton}
-          >
-            <Text style={styles.linkText}>Don't have an account? Register</Text>
-          </TouchableOpacity>
-        </View>
+        <Link href="/auth/register" asChild>
+          <Pressable testID="login-go-register" style={styles.link}>
+            <Text style={styles.linkText}>No record yet · inscribe me</Text>
+          </Pressable>
+        </Link>
+
+        <Link href="/admin/login" asChild>
+          <Pressable testID="login-go-admin" style={styles.adminLink}>
+            <Text style={styles.adminLinkText}>Curator portal</Text>
+          </Pressable>
+        </Link>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0c0c0c',
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#888',
-    fontStyle: 'italic',
-  },
-  form: {
-    width: '100%',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    height: 56,
-    color: '#ffffff',
-    fontSize: 16,
-  },
-  eyeIcon: {
-    padding: 8,
-  },
-  button: {
-    backgroundColor: '#6366f1',
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  linkButton: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#6366f1',
-    fontSize: 14,
-  },
+  root: { flex: 1, backgroundColor: '#0a0a0c' },
+  inner: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
+  brand: { fontSize: 30, letterSpacing: 6, color: '#f3ecd9', fontWeight: '300' },
+  tagline: { fontSize: 10, letterSpacing: 4, color: '#7a7568', marginTop: 6, textTransform: 'uppercase' },
+  divider: { height: 1, backgroundColor: '#1f1e1a', marginVertical: 36, width: 64 },
+  label: { fontSize: 10, letterSpacing: 3, color: '#6e6a5e', textTransform: 'uppercase', marginBottom: 8, marginTop: 18 },
+  input: { backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: '#2a2820', color: '#f3ecd9', fontSize: 16, paddingVertical: 12 },
+  cta: { marginTop: 40, backgroundColor: '#d6c9a8', height: 52, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
+  ctaPressed: { backgroundColor: '#c2b58f' },
+  ctaText: { color: '#0a0a0c', letterSpacing: 3, fontSize: 12, textTransform: 'uppercase', fontWeight: '600' },
+  link: { marginTop: 28, alignItems: 'center' },
+  linkText: { color: '#7a7568', fontSize: 12, letterSpacing: 1 },
+  adminLink: { marginTop: 16, alignItems: 'center' },
+  adminLinkText: { color: '#4a4738', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase' },
 });

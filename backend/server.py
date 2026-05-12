@@ -1,36 +1,51 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+"""
+Selbrucivo — Location-aware creative library platform.
+Phase 2 Restructure: Guilds, Local Libraries, Artwork archival.
+"""
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import base64
+import io
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
-import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 from bson import ObjectId
+from PIL import Image
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT Configuration
 SECRET_KEY = os.environ.get('JWT_SECRET', 'selbrucivo-secret-key-change-in-production')
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 14  # 14 days
 
-# Create the main app
-app = FastAPI()
+app = FastAPI(title="Selbrucivo API")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
+
+GUILDS = {"illustrator", "animator", "designer"}
+GLOBAL_TOTAL_THRESHOLD = 3000
+GLOBAL_PER_GUILD_THRESHOLD = 1000
+
+# Portrait validation constraints
+MIN_WIDTH = 720
+MIN_HEIGHT = 1280
+MAX_ASPECT_RATIO = 9 / 16  # width/height must be <= ~0.5625 (portrait)
+MIN_ASPECT_RATIO = 9 / 22  # don't allow absurdly tall slivers
+
 
 # ============= MODELS =============
 
@@ -39,443 +54,623 @@ class UserRegister(BaseModel):
     password: str
     email: Optional[str] = None
 
+
 class UserLogin(BaseModel):
     username: str
     password: str
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    user: dict
 
-class UserResponse(BaseModel):
-    id: str
-    username: str
-    email: Optional[str]
-    current_timezone: str
-    unlocked_timezones: List[str]
-    class_id: Optional[str]
-    device_info: Optional[dict]
-    created_at: str
+class OnboardingPayload(BaseModel):
+    guild: str  # illustrator | animator | designer
+    city: str
+    region: Optional[str] = ""  # state/region
+    country: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
-class WallpaperResponse(BaseModel):
-    id: str
-    image_base64: str
-    creator_credit: str
-    timezone: str
-    date_assigned: str
-    upload_date: str
-
-class AdminRegister(BaseModel):
-    username: str
-    password: str
 
 class AdminLogin(BaseModel):
     username: str
     password: str
 
-class WallpaperUpload(BaseModel):
-    image_base64: str
-    creator_credit: str
-    timezone: str
-    date_assigned: str
 
-class ClassCreate(BaseModel):
-    name: str
+class ArtworkUpload(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    tags: List[str] = []
+    image_base64: str  # data:image/png;base64,... or raw base64
+    creator_credit: Optional[str] = None  # falls back to username
 
-class ClassInvite(BaseModel):
-    username: str
 
-class CheckInRequest(BaseModel):
-    latitude: float
-    longitude: float
-    timezone: str
+class ArtworkReject(BaseModel):
+    reason: str = ""
 
-class AdminApplication(BaseModel):
-    name: str
-    dob: str
-    city: str
-    state: str
-    country: str
-    social_links: List[str]
-    portfolio_links: List[str]
-    documents: List[str]  # base64 or URLs
 
-# ============= HELPER FUNCTIONS =============
+# ============= HELPERS =============
 
-def create_access_token(data: dict):
+def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
+def require_user(payload: dict = Depends(verify_token)) -> dict:
+    if not payload.get("user_id"):
+        raise HTTPException(status_code=403, detail="User token required")
+    return payload
+
+
+def require_admin(payload: dict = Depends(verify_token)) -> dict:
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return payload
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
 
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-def get_timezone_from_coords(lat: float, lon: float) -> str:
-    # Simplified timezone detection - in production, use a proper library
-    # For now, return a default timezone
-    return "America/New_York"
 
-# ============= USER AUTHENTICATION ROUTES =============
+def slugify(text: str) -> str:
+    s = re.sub(r'[^a-zA-Z0-9]+', '-', text.lower()).strip('-')
+    return s or "unknown"
 
-@api_router.post("/auth/register", response_model=Token)
-async def register(user_data: UserRegister):
-    # Check if username exists
-    existing_user = await db.users.find_one({"username": user_data.username})
-    if existing_user:
+
+def library_slug(city: str, region: str, country: str) -> str:
+    return slugify(f"{city}-{region}-{country}")
+
+
+def decode_image(image_base64: str):
+    """Strip data URL prefix and return (PIL Image, mime, raw_b64)."""
+    raw = image_base64
+    mime = "image/png"
+    if raw.startswith("data:"):
+        try:
+            header, raw = raw.split(",", 1)
+            m = re.search(r'data:([^;]+);', header)
+            if m:
+                mime = m.group(1)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Malformed data URL")
+    try:
+        binary = base64.b64decode(raw, validate=False)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image")
+    try:
+        img = Image.open(io.BytesIO(binary))
+        img.load()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Unreadable image")
+    return img, mime, raw
+
+
+def validate_portrait(img: Image.Image):
+    w, h = img.size
+    if w < MIN_WIDTH or h < MIN_HEIGHT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Resolution too low. Minimum {MIN_WIDTH}x{MIN_HEIGHT}; received {w}x{h}.",
+        )
+    if h <= w:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Artwork must be portrait orientation (height > width). Received {w}x{h}.",
+        )
+    ratio = w / h
+    if ratio > MAX_ASPECT_RATIO + 0.05:
+        raise HTTPException(
+            status_code=400,
+            detail="Artwork is not portrait enough (aspect ratio wider than 9:16).",
+        )
+    if ratio < MIN_ASPECT_RATIO - 0.02:
+        raise HTTPException(
+            status_code=400,
+            detail="Artwork is too narrow/tall (beyond 9:22 ratio).",
+        )
+    return w, h
+
+
+async def ensure_local_library(city: str, region: str, country: str) -> dict:
+    slug = library_slug(city, region, country)
+    existing = await db.local_libraries.find_one({"slug": slug}, {"_id": 0})
+    if existing:
+        return existing
+    lib = {
+        "_id": str(ObjectId()),
+        "slug": slug,
+        "city": city.strip(),
+        "region": (region or "").strip(),
+        "country": country.strip(),
+        "member_count": 0,
+        "guild_counts": {"illustrator": 0, "animator": 0, "designer": 0},
+        "is_global": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.local_libraries.insert_one(lib)
+    return {k: v for k, v in lib.items() if k != "_id"} | {"id": lib["_id"]}
+
+
+def serialize_library(lib: dict) -> dict:
+    return {
+        "id": lib.get("id") or lib.get("_id"),
+        "slug": lib["slug"],
+        "city": lib["city"],
+        "region": lib.get("region", ""),
+        "country": lib["country"],
+        "member_count": lib.get("member_count", 0),
+        "guild_counts": lib.get("guild_counts", {"illustrator": 0, "animator": 0, "designer": 0}),
+        "is_global": lib.get("is_global", False),
+        "global_thresholds": {
+            "total": GLOBAL_TOTAL_THRESHOLD,
+            "per_guild": GLOBAL_PER_GUILD_THRESHOLD,
+        },
+    }
+
+
+def serialize_artwork(a: dict) -> dict:
+    return {
+        "id": a["_id"],
+        "title": a.get("title", ""),
+        "description": a.get("description", ""),
+        "tags": a.get("tags", []),
+        "guild": a.get("guild"),
+        "image_base64": a.get("image_base64"),
+        "image_mime": a.get("image_mime", "image/jpeg"),
+        "width": a.get("width"),
+        "height": a.get("height"),
+        "city": a.get("city"),
+        "region": a.get("region", ""),
+        "country": a.get("country"),
+        "library_id": a.get("library_id"),
+        "creator_name": a.get("creator_name"),
+        "uploader_id": a.get("uploader_id"),
+        "status": a.get("status"),
+        "uploaded_at": a.get("uploaded_at"),
+        "approved_at": a.get("approved_at"),
+        "reject_reason": a.get("reject_reason"),
+    }
+
+
+# ============= AUTH =============
+
+@api_router.post("/auth/register")
+async def register(data: UserRegister):
+    if not data.username or not data.password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    existing = await db.users.find_one({"username": data.username.lower()})
+    if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
-    
-    # Create user
     user = {
         "_id": str(ObjectId()),
-        "username": user_data.username,
-        "password_hash": hash_password(user_data.password),
-        "email": user_data.email,
-        "current_timezone": "America/New_York",  # Default timezone
-        "unlocked_timezones": ["America/New_York"],
-        "class_id": None,
-        "device_info": None,
-        "created_at": datetime.utcnow().isoformat()
+        "username": data.username.lower(),
+        "display_name": data.username,
+        "password_hash": hash_password(data.password),
+        "email": data.email,
+        "guild": None,
+        "city": None,
+        "region": None,
+        "country": None,
+        "library_id": None,
+        "latitude": None,
+        "longitude": None,
+        "onboarded": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    
     await db.users.insert_one(user)
-    
-    # Create token
     token = create_access_token({"user_id": user["_id"], "username": user["username"]})
-    
     return {
         "access_token": token,
         "token_type": "bearer",
         "user": {
             "id": user["_id"],
-            "username": user["username"],
-            "current_timezone": user["current_timezone"]
-        }
+            "username": user["display_name"],
+            "onboarded": False,
+            "guild": None,
+            "library_id": None,
+        },
     }
 
-@api_router.post("/auth/login", response_model=Token)
-async def login(user_data: UserLogin):
-    # Find user
-    user = await db.users.find_one({"username": user_data.username})
+
+@api_router.post("/auth/login")
+async def login(data: UserLogin):
+    user = await db.users.find_one({"username": data.username.lower()})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_access_token({"user_id": user["_id"], "username": user["username"]})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["_id"],
+            "username": user.get("display_name", user["username"]),
+            "onboarded": bool(user.get("onboarded")),
+            "guild": user.get("guild"),
+            "library_id": user.get("library_id"),
+        },
+    }
+
+
+@api_router.get("/auth/me")
+async def me(payload: dict = Depends(require_user)):
+    user = await db.users.find_one({"_id": payload["user_id"]}, {"password_hash": 0})
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    
-    # Verify password
-    if not verify_password(user_data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    
-    # Create token
-    token = create_access_token({"user_id": user["_id"], "username": user["username"]})
-    
+        raise HTTPException(status_code=404, detail="User not found")
+    library = None
+    if user.get("library_id"):
+        lib = await db.local_libraries.find_one({"_id": user["library_id"]})
+        if lib:
+            library = serialize_library({**lib, "id": lib["_id"]})
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user["_id"],
-            "username": user["username"],
-            "current_timezone": user.get("current_timezone", "America/New_York")
-        }
+        "id": user["_id"],
+        "username": user.get("display_name", user["username"]),
+        "email": user.get("email"),
+        "guild": user.get("guild"),
+        "city": user.get("city"),
+        "region": user.get("region"),
+        "country": user.get("country"),
+        "library_id": user.get("library_id"),
+        "library": library,
+        "onboarded": bool(user.get("onboarded")),
+        "created_at": user.get("created_at"),
     }
 
-@api_router.get("/auth/me", response_model=UserResponse)
-async def get_current_user(payload: dict = Depends(verify_token)):
+
+@api_router.post("/auth/onboarding")
+async def onboarding(data: OnboardingPayload, payload: dict = Depends(require_user)):
+    guild = data.guild.lower().strip()
+    if guild not in GUILDS:
+        raise HTTPException(status_code=400, detail="Invalid guild")
+    if not data.city or not data.country:
+        raise HTTPException(status_code=400, detail="City and country required")
+
     user = await db.users.find_one({"_id": payload["user_id"]})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    return UserResponse(
-        id=user["_id"],
-        username=user["username"],
-        email=user.get("email"),
-        current_timezone=user.get("current_timezone", "America/New_York"),
-        unlocked_timezones=user.get("unlocked_timezones", ["America/New_York"]),
-        class_id=user.get("class_id"),
-        device_info=user.get("device_info"),
-        created_at=user.get("created_at", "")
+
+    library = await ensure_local_library(data.city, data.region or "", data.country)
+    library_id = library.get("id") or library.get("_id")
+
+    previous_guild = user.get("guild")
+    previous_library_id = user.get("library_id")
+    was_counted = bool(user.get("onboarded"))
+
+    await db.users.update_one(
+        {"_id": payload["user_id"]},
+        {
+            "$set": {
+                "guild": guild,
+                "city": data.city.strip(),
+                "region": (data.region or "").strip(),
+                "country": data.country.strip(),
+                "library_id": library_id,
+                "latitude": data.latitude,
+                "longitude": data.longitude,
+                "onboarded": True,
+                "onboarded_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
     )
 
-# ============= WALLPAPER ROUTES =============
-
-@api_router.get("/wallpapers/today")
-async def get_todays_wallpaper(payload: dict = Depends(verify_token)):
-    user = await db.users.find_one({"_id": payload["user_id"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    timezone = user.get("current_timezone", "America/New_York")
-    today = datetime.utcnow().date().isoformat()
-    
-    # Find today's wallpaper for user's timezone
-    wallpaper = await db.wallpapers.find_one({
-        "timezone": timezone,
-        "date_assigned": today
-    })
-    
-    if not wallpaper:
-        # Return a placeholder or most recent wallpaper
-        wallpaper = await db.wallpapers.find_one(
-            {"timezone": timezone},
-            sort=[("date_assigned", -1)]
+    # Decrement previous library counters if user is moving
+    if was_counted and previous_library_id and previous_library_id != library_id:
+        await db.local_libraries.update_one(
+            {"_id": previous_library_id},
+            {
+                "$inc": {
+                    "member_count": -1,
+                    f"guild_counts.{previous_guild}": -1,
+                }
+            },
         )
-    
-    if not wallpaper:
-        raise HTTPException(status_code=404, detail="No wallpaper available for your timezone")
-    
-    return {
-        "id": wallpaper["_id"],
-        "image_base64": wallpaper["image_base64"],
-        "creator_credit": wallpaper["creator_credit"],
-        "timezone": wallpaper["timezone"],
-        "date_assigned": wallpaper["date_assigned"]
-    }
-
-@api_router.get("/wallpapers/history")
-async def get_wallpaper_history(payload: dict = Depends(verify_token)):
-    user = await db.users.find_one({"_id": payload["user_id"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    timezone = user.get("current_timezone", "America/New_York")
-    today = datetime.utcnow().date().isoformat()
-    
-    # Get past wallpapers (not including today)
-    wallpapers = await db.wallpapers.find({
-        "timezone": timezone,
-        "date_assigned": {"$lt": today}
-    }).sort("date_assigned", -1).to_list(100)
-    
-    return [
-        {
-            "id": w["_id"],
-            "image_base64": w["image_base64"],
-            "creator_credit": w["creator_credit"],
-            "timezone": w["timezone"],
-            "date_assigned": w["date_assigned"]
+    elif was_counted and previous_library_id == library_id and previous_guild != guild:
+        # Same library, different guild
+        await db.local_libraries.update_one(
+            {"_id": library_id},
+            {"$inc": {f"guild_counts.{previous_guild}": -1, f"guild_counts.{guild}": 1}},
+        )
+        await _recheck_global(library_id)
+        lib = await db.local_libraries.find_one({"_id": library_id})
+        return {
+            "message": "Guild updated",
+            "guild": guild,
+            "library": serialize_library({**lib, "id": lib["_id"]}),
         }
-        for w in wallpapers
-    ]
 
-@api_router.get("/wallpapers/archive/{timezone:path}")
-async def get_timezone_archive(timezone: str, payload: dict = Depends(verify_token)):
-    user = await db.users.find_one({"_id": payload["user_id"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Check if user has unlocked this timezone
-    if timezone not in user.get("unlocked_timezones", []):
-        raise HTTPException(status_code=403, detail="Timezone not unlocked")
-    
-    # Get all wallpapers for this timezone
-    wallpapers = await db.wallpapers.find(
-        {"timezone": timezone}
-    ).sort("date_assigned", -1).to_list(1000)
-    
-    return [
-        {
-            "id": w["_id"],
-            "image_base64": w["image_base64"],
-            "creator_credit": w["creator_credit"],
-            "timezone": w["timezone"],
-            "date_assigned": w["date_assigned"]
-        }
-        for w in wallpapers
-    ]
+    # Increment new library counters if new assignment or new library
+    if not was_counted or (previous_library_id != library_id):
+        await db.local_libraries.update_one(
+            {"_id": library_id},
+            {"$inc": {"member_count": 1, f"guild_counts.{guild}": 1}},
+        )
 
-# REMOVED: Wallpaper reactions violate contemplative design
-# Wallpapers are curriculum artifacts, not engagement content
-
-# ============= ADMIN ROUTES =============
-
-@api_router.post("/admin/auth/register")
-async def register_admin(admin_data: AdminRegister):
-    # Check if admin exists
-    existing = await db.admin_users.find_one({"username": admin_data.username})
-    if existing:
-        raise HTTPException(status_code=400, detail="Admin username already exists")
-    
-    admin = {
-        "_id": str(ObjectId()),
-        "username": admin_data.username,
-        "password_hash": hash_password(admin_data.password),
-        "upload_history": [],
-        "created_at": datetime.utcnow().isoformat()
-    }
-    await db.admin_users.insert_one(admin)
-    
-    token = create_access_token({"admin_id": admin["_id"], "username": admin["username"], "role": "admin"})
-    
+    await _recheck_global(library_id)
+    lib = await db.local_libraries.find_one({"_id": library_id})
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "admin": {"id": admin["_id"], "username": admin["username"]}
+        "message": f"Welcome to the {guild.title()}'s Guild of {data.city}",
+        "guild": guild,
+        "library": serialize_library({**lib, "id": lib["_id"]}),
     }
+
+
+async def _recheck_global(library_id: str):
+    lib = await db.local_libraries.find_one({"_id": library_id})
+    if not lib:
+        return
+    counts = lib.get("guild_counts", {})
+    eligible = (
+        lib.get("member_count", 0) >= GLOBAL_TOTAL_THRESHOLD
+        and counts.get("illustrator", 0) >= GLOBAL_PER_GUILD_THRESHOLD
+        and counts.get("animator", 0) >= GLOBAL_PER_GUILD_THRESHOLD
+        and counts.get("designer", 0) >= GLOBAL_PER_GUILD_THRESHOLD
+    )
+    if eligible and not lib.get("is_global"):
+        await db.local_libraries.update_one(
+            {"_id": library_id},
+            {"$set": {"is_global": True, "promoted_at": datetime.now(timezone.utc).isoformat()}},
+        )
+
+
+# ============= ADMIN AUTH =============
 
 @api_router.post("/admin/auth/login")
-async def login_admin(admin_data: AdminLogin):
-    admin = await db.admin_users.find_one({"username": admin_data.username})
-    if not admin:
+async def admin_login(data: AdminLogin):
+    admin = await db.admin_users.find_one({"username": data.username.lower()})
+    if not admin or not verify_password(data.password, admin["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    if not verify_password(admin_data.password, admin["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    token = create_access_token({"admin_id": admin["_id"], "username": admin["username"], "role": "admin"})
-    
+    token = create_access_token(
+        {"admin_id": admin["_id"], "username": admin["username"], "role": "admin"}
+    )
     return {
         "access_token": token,
         "token_type": "bearer",
-        "admin": {"id": admin["_id"], "username": admin["username"]}
+        "admin": {"id": admin["_id"], "username": admin["username"]},
     }
 
-@api_router.post("/admin/wallpapers/upload")
-async def upload_wallpaper(wallpaper_data: WallpaperUpload, payload: dict = Depends(verify_token)):
-    if payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    wallpaper = {
+
+# ============= ARTWORKS =============
+
+@api_router.post("/artworks/upload")
+async def upload_artwork(data: ArtworkUpload, payload: dict = Depends(require_user)):
+    user = await db.users.find_one({"_id": payload["user_id"]})
+    if not user or not user.get("onboarded"):
+        raise HTTPException(status_code=400, detail="Complete onboarding before uploading")
+    if not data.title.strip():
+        raise HTTPException(status_code=400, detail="Title required")
+    if not data.image_base64:
+        raise HTTPException(status_code=400, detail="Image required")
+
+    img, mime, raw = decode_image(data.image_base64)
+    w, h = validate_portrait(img)
+
+    artwork = {
         "_id": str(ObjectId()),
-        "image_base64": wallpaper_data.image_base64,
-        "creator_credit": wallpaper_data.creator_credit,
-        "timezone": wallpaper_data.timezone,
-        "date_assigned": wallpaper_data.date_assigned,
-        "upload_date": datetime.utcnow().isoformat(),
-        "uploaded_by_admin_id": payload["admin_id"],
-        "metrics": {"devices_sent_to": 0, "reactions": []}
+        "uploader_id": user["_id"],
+        "creator_name": (data.creator_credit or user.get("display_name") or user["username"]).strip(),
+        "guild": user["guild"],
+        "library_id": user["library_id"],
+        "city": user["city"],
+        "region": user.get("region", ""),
+        "country": user["country"],
+        "title": data.title.strip(),
+        "description": (data.description or "").strip(),
+        "tags": [t.strip().lower() for t in data.tags if t.strip()][:10],
+        "image_base64": raw,
+        "image_mime": mime,
+        "width": w,
+        "height": h,
+        "status": "pending",
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": None,
+        "reviewed_by": None,
+        "reject_reason": None,
     }
-    
-    await db.wallpapers.insert_one(wallpaper)
-    
-    # Update admin upload history
-    await db.admin_users.update_one(
-        {"_id": payload["admin_id"]},
-        {"$push": {"upload_history": wallpaper["_id"]}}
-    )
-    
-    return {"message": "Wallpaper uploaded successfully", "id": wallpaper["_id"]}
+    await db.artworks.insert_one(artwork)
+    return {"message": "Submitted for archival review", "id": artwork["_id"], "status": "pending"}
 
-@api_router.get("/admin/wallpapers/history")
-async def get_admin_upload_history(payload: dict = Depends(verify_token)):
-    if payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    admin = await db.admin_users.find_one({"_id": payload["admin_id"]})
-    if not admin:
-        raise HTTPException(status_code=404, detail="Admin not found")
-    
-    wallpaper_ids = admin.get("upload_history", [])
-    wallpapers = await db.wallpapers.find({"_id": {"$in": wallpaper_ids}}).to_list(1000)
-    
-    return [
+
+@api_router.get("/artworks/feed")
+async def artworks_feed(
+    payload: dict = Depends(require_user),
+    guild: Optional[str] = Query(None),
+    scope: str = Query("local"),  # local | global
+    limit: int = Query(50, ge=1, le=200),
+):
+    user = await db.users.find_one({"_id": payload["user_id"]})
+    if not user or not user.get("onboarded"):
+        raise HTTPException(status_code=400, detail="Complete onboarding")
+
+    q: dict = {"status": "approved"}
+    if scope == "local":
+        q["library_id"] = user["library_id"]
+    elif scope == "global":
+        # Show approved artworks from libraries that have achieved global status.
+        global_libs = await db.local_libraries.find({"is_global": True}).to_list(1000)
+        global_ids = [lib["_id"] for lib in global_libs]
+        if not global_ids:
+            return []
+        q["library_id"] = {"$in": global_ids}
+    if guild and guild.lower() in GUILDS:
+        q["guild"] = guild.lower()
+
+    artworks = await db.artworks.find(q).sort("approved_at", -1).to_list(limit)
+    return [serialize_artwork(a) for a in artworks]
+
+
+@api_router.get("/artworks/mine")
+async def my_artworks(payload: dict = Depends(require_user)):
+    artworks = await db.artworks.find(
+        {"uploader_id": payload["user_id"]}
+    ).sort("uploaded_at", -1).to_list(200)
+    return [serialize_artwork(a) for a in artworks]
+
+
+@api_router.get("/artworks/{artwork_id}")
+async def get_artwork(artwork_id: str, payload: dict = Depends(require_user)):
+    a = await db.artworks.find_one({"_id": artwork_id})
+    if not a:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+    if a["status"] != "approved" and a["uploader_id"] != payload["user_id"]:
+        raise HTTPException(status_code=403, detail="Not visible")
+    return serialize_artwork(a)
+
+
+# ============= LIBRARIES =============
+
+@api_router.get("/library/me")
+async def my_library(payload: dict = Depends(require_user)):
+    user = await db.users.find_one({"_id": payload["user_id"]})
+    if not user or not user.get("library_id"):
+        raise HTTPException(status_code=404, detail="No library assigned")
+    lib = await db.local_libraries.find_one({"_id": user["library_id"]})
+    if not lib:
+        raise HTTPException(status_code=404, detail="Library not found")
+    approved_count = await db.artworks.count_documents(
+        {"library_id": lib["_id"], "status": "approved"}
+    )
+    return {
+        **serialize_library({**lib, "id": lib["_id"]}),
+        "approved_artwork_count": approved_count,
+    }
+
+
+@api_router.get("/libraries")
+async def list_libraries(global_only: bool = Query(False)):
+    q = {"is_global": True} if global_only else {}
+    libs = await db.local_libraries.find(q).sort("member_count", -1).to_list(500)
+    return [serialize_library({**lib, "id": lib["_id"]}) for lib in libs]
+
+
+# ============= ADMIN MODERATION =============
+
+@api_router.get("/admin/artworks/pending")
+async def admin_pending(payload: dict = Depends(require_admin)):
+    artworks = await db.artworks.find({"status": "pending"}).sort("uploaded_at", 1).to_list(500)
+    return [serialize_artwork(a) for a in artworks]
+
+
+@api_router.get("/admin/artworks")
+async def admin_all_artworks(
+    payload: dict = Depends(require_admin),
+    status: Optional[str] = Query(None),
+):
+    q = {}
+    if status:
+        q["status"] = status
+    artworks = await db.artworks.find(q).sort("uploaded_at", -1).to_list(500)
+    return [serialize_artwork(a) for a in artworks]
+
+
+@api_router.post("/admin/artworks/{artwork_id}/approve")
+async def admin_approve(artwork_id: str, payload: dict = Depends(require_admin)):
+    a = await db.artworks.find_one({"_id": artwork_id})
+    if not a:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+    if a["status"] == "approved":
+        return {"message": "Already approved"}
+    await db.artworks.update_one(
+        {"_id": artwork_id},
         {
-            "id": w["_id"],
-            "creator_credit": w["creator_credit"],
-            "timezone": w["timezone"],
-            "date_assigned": w["date_assigned"],
-            "upload_date": w["upload_date"],
-            "metrics": w.get("metrics", {})
-        }
-        for w in wallpapers
-    ]
+            "$set": {
+                "status": "approved",
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "reviewed_by": payload["admin_id"],
+                "reject_reason": None,
+            }
+        },
+    )
+    return {"message": "Artwork approved", "id": artwork_id}
+
+
+@api_router.post("/admin/artworks/{artwork_id}/reject")
+async def admin_reject(
+    artwork_id: str,
+    data: ArtworkReject,
+    payload: dict = Depends(require_admin),
+):
+    a = await db.artworks.find_one({"_id": artwork_id})
+    if not a:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+    await db.artworks.update_one(
+        {"_id": artwork_id},
+        {
+            "$set": {
+                "status": "rejected",
+                "reviewed_by": payload["admin_id"],
+                "reject_reason": data.reason or "Did not meet archival standards",
+                "rejected_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    return {"message": "Artwork rejected", "id": artwork_id}
+
+
+# ============= METRICS =============
 
 @api_router.get("/metrics/global")
-async def get_global_metrics():
-    """
-    Observational metrics endpoint - Non-interactive, anonymized global statistics
-    Designed for contemplative observation, not engagement tracking
-    """
-    total_users = await db.users.count_documents({})
-    total_wallpapers = await db.wallpapers.count_documents({})
-    
-    # Passive validation metrics only
-    completed_checkins = await db.check_ins.count_documents({"status": "completed"})
-    total_classes = await db.classes.count_documents({})
-    
-    # Timezone distribution (observational, not real-time)
-    users = await db.users.find({}).to_list(10000)
-    timezone_distribution = {}
-    for user in users:
-        tz = user.get("current_timezone", "Unknown")
-        timezone_distribution[tz] = timezone_distribution.get(tz, 0) + 1
-    
+async def metrics_global():
+    """Observational metrics — non-engagement, archival statistics only."""
+    total_users = await db.users.count_documents({"onboarded": True})
+    total_libraries = await db.local_libraries.count_documents({})
+    global_libraries = await db.local_libraries.count_documents({"is_global": True})
+    total_approved = await db.artworks.count_documents({"status": "approved"})
+    total_pending = await db.artworks.count_documents({"status": "pending"})
+
+    guild_totals = {"illustrator": 0, "animator": 0, "designer": 0}
+    libs = await db.local_libraries.find({}, {"guild_counts": 1, "_id": 0}).to_list(2000)
+    for lib in libs:
+        for g, c in (lib.get("guild_counts") or {}).items():
+            if g in guild_totals:
+                guild_totals[g] += c
+
     return {
-        "total_users": total_users,
-        "timezone_distribution": timezone_distribution,
-        "completed_24h_checkins": completed_checkins,
-        "total_classes": total_classes,
-        "total_wallpapers": total_wallpapers,
-        # Removed: device_types (engagement-oriented)
-        # Removed: active_users (real-time metric)
-        # Removed: users_checking_in (encourages polling)
+        "total_members": total_users,
+        "total_local_libraries": total_libraries,
+        "global_libraries": global_libraries,
+        "approved_artworks": total_approved,
+        "pending_artworks": total_pending,
+        "guild_distribution": guild_totals,
+        "global_thresholds": {
+            "total": GLOBAL_TOTAL_THRESHOLD,
+            "per_guild": GLOBAL_PER_GUILD_THRESHOLD,
+        },
     }
 
-# REMOVED: Admin application system violates authority model
-# Admins are assigned externally/manually, not through in-app applications
-# Admin roles are curatorial positions, not user-accessible privileges
 
-# ============= CLASS ROUTES =============
+# ============= SEED =============
 
-@api_router.post("/classes/create")
-async def create_class(class_data: ClassCreate, payload: dict = Depends(verify_token)):
-    user = await db.users.find_one({"_id": payload["user_id"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    if user.get("class_id"):
-        raise HTTPException(status_code=400, detail="User already has a class")
-    
-    new_class = {
-        "_id": str(ObjectId()),
-        "name": class_data.name,
-        "creator_id": payload["user_id"],
-        "members": [payload["user_id"]],
-        "pending_invites": [],
-        "created_at": datetime.utcnow().isoformat()
-    }
-    
-    await db.classes.insert_one(new_class)
-    await db.users.update_one({"_id": payload["user_id"]}, {"$set": {"class_id": new_class["_id"]}})
-    
-    return {"message": "Class created", "class_id": new_class["_id"]}
+@app.on_event("startup")
+async def seed_admin():
+    existing = await db.admin_users.find_one({"username": "admin"})
+    if not existing:
+        await db.admin_users.insert_one(
+            {
+                "_id": str(ObjectId()),
+                "username": "admin",
+                "password_hash": hash_password("admin123"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        logging.getLogger("selbrucivo").info("Seeded default admin (admin/admin123)")
 
-@api_router.get("/classes/my-class")
-async def get_my_class(payload: dict = Depends(verify_token)):
-    user = await db.users.find_one({"_id": payload["user_id"]})
-    if not user or not user.get("class_id"):
-        return None
-    
-    class_obj = await db.classes.find_one({"_id": user["class_id"]})
-    if not class_obj:
-        return None
-    
-    # Get member details
-    members = await db.users.find({"_id": {"$in": class_obj["members"]}}).to_list(100)
-    
-    return {
-        "id": class_obj["_id"],
-        "name": class_obj["name"],
-        "creator_id": class_obj["creator_id"],
-        "members": [{"id": m["_id"], "username": m["username"]} for m in members],
-        "pending_invites": class_obj.get("pending_invites", [])
-    }
 
-# Include router
+# Mount
 app.include_router(api_router)
-
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -486,9 +681,9 @@ app.add_middleware(
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
-logger = logging.getLogger(__name__)
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

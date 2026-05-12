@@ -1,69 +1,56 @@
+import React from 'react';
 import { Tabs } from 'expo-router';
+import { Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: '#1a1a1a',
-          borderTopColor: '#2a2a2a',
+          backgroundColor: 'rgba(10,10,12,0.92)',
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          borderTopColor: '#1a1a1c',
+          height: Platform.OS === 'ios' ? 86 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
           paddingTop: 8,
+          elevation: 0,
         },
-        tabBarActiveTintColor: '#6366f1',
-        tabBarInactiveTintColor: '#666',
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
+        tabBarActiveTintColor: '#d6c9a8',
+        tabBarInactiveTintColor: '#4a4738',
       }}
     >
       <Tabs.Screen
-        name="home"
+        name="ambient"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <View testID="tab-ambient"><Ionicons name="square-outline" size={20} color={color} /></View>
           ),
         }}
       />
       <Tabs.Screen
-        name="archive"
+        name="library"
         options={{
-          title: 'Archive',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="images-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <View testID="tab-library"><Ionicons name="library-outline" size={20} color={color} /></View>
           ),
         }}
       />
       <Tabs.Screen
-        name="classes"
+        name="upload"
         options={{
-          title: 'Classes',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="metrics"
-        options={{
-          title: 'Metrics',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="stats-chart-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <View testID="tab-upload"><Ionicons name="add-outline" size={26} color={color} /></View>
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <View testID="tab-profile"><Ionicons name="person-outline" size={20} color={color} /></View>
           ),
         }}
       />

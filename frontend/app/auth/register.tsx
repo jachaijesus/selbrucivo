@@ -1,253 +1,78 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { Ionicons } from '@expo/vector-icons';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { useRouter, Link } from 'expo-router';
+import { storage } from '../../utils/storage';
+import { api } from '../../utils/api';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const handleRegister = async () => {
-    if (!username || !password) {
-      Alert.alert('Error', 'Username and password are required');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
+  const submit = async () => {
+    if (!username || !password) return Alert.alert('Required', 'Username and passphrase required');
+    if (password.length < 6) return Alert.alert('Too short', 'Passphrase must be at least 6 characters');
+    if (password !== confirm) return Alert.alert('Mismatch', 'Passphrases do not match');
     setLoading(true);
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/auth/register`, {
-        username,
-        email: email || null,
-        password,
-      });
-
-      const { access_token, user } = response.data;
-      await AsyncStorage.setItem('auth_token', access_token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-
-      Alert.alert('Success', 'Account created successfully!');
-      router.replace('/(tabs)/home');
-    } catch (error: any) {
-      Alert.alert(
-        'Registration Failed',
-        error.response?.data?.detail || 'Could not create account'
-      );
+      const data = await api.post('/api/auth/register', { username, email: email || null, password });
+      await storage.setItem('auth_token', data.access_token);
+      await storage.setItem('user', JSON.stringify(data.user));
+      router.replace('/onboarding');
+    } catch (e: any) {
+      Alert.alert('Could not inscribe', e?.response?.data?.detail || 'Try a different identifier');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
+      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
+        <Text style={styles.brand}>inscribe</Text>
+        <Text style={styles.tagline}>your record in the archive</Text>
+        <View style={styles.divider} />
 
-          <View style={styles.header}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join the academia of self</Text>
-          </View>
+        <Text style={styles.label}>Identifier</Text>
+        <TextInput testID="register-username-input" style={styles.input} value={username} onChangeText={setUsername} autoCapitalize="none" placeholder="username" placeholderTextColor="#4a4738" />
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Username"
-                placeholderTextColor="#666"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
-            </View>
+        <Text style={styles.label}>Correspondence (optional)</Text>
+        <TextInput testID="register-email-input" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="you@somewhere" placeholderTextColor="#4a4738" />
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Email (optional)"
-                placeholderTextColor="#666"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+        <Text style={styles.label}>Passphrase</Text>
+        <TextInput testID="register-password-input" style={styles.input} value={password} onChangeText={setPassword} secureTextEntry placeholder="at least 6 characters" placeholderTextColor="#4a4738" />
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#666"
-                />
-              </TouchableOpacity>
-            </View>
+        <Text style={styles.label}>Confirm passphrase</Text>
+        <TextInput testID="register-confirm-input" style={styles.input} value={confirm} onChangeText={setConfirm} secureTextEntry placeholderTextColor="#4a4738" />
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm Password"
-                placeholderTextColor="#666"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showPassword}
-              />
-            </View>
+        <Pressable testID="register-submit-button" style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]} onPress={submit} disabled={loading}>
+          {loading ? <ActivityIndicator color="#0a0a0c" /> : <Text style={styles.ctaText}>Inscribe</Text>}
+        </Pressable>
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Register</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.linkButton}
-            >
-              <Text style={styles.linkText}>Already have an account? Login</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <Link href="/auth/login" asChild>
+          <Pressable style={styles.link}>
+            <Text style={styles.linkText}>I already have a record</Text>
+          </Pressable>
+        </Link>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0c0c0c',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 60,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 48,
-    left: 24,
-    zIndex: 1,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-    marginTop: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#888',
-    fontStyle: 'italic',
-  },
-  form: {
-    width: '100%',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    height: 56,
-    color: '#ffffff',
-    fontSize: 16,
-  },
-  eyeIcon: {
-    padding: 8,
-  },
-  button: {
-    backgroundColor: '#6366f1',
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  linkButton: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#6366f1',
-    fontSize: 14,
-  },
+  root: { flex: 1, backgroundColor: '#0a0a0c' },
+  inner: { paddingHorizontal: 32, paddingTop: 96, paddingBottom: 64 },
+  brand: { fontSize: 30, letterSpacing: 6, color: '#f3ecd9', fontWeight: '300' },
+  tagline: { fontSize: 10, letterSpacing: 4, color: '#7a7568', marginTop: 6, textTransform: 'uppercase' },
+  divider: { height: 1, backgroundColor: '#1f1e1a', marginVertical: 28, width: 64 },
+  label: { fontSize: 10, letterSpacing: 3, color: '#6e6a5e', textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  input: { borderBottomWidth: 1, borderBottomColor: '#2a2820', color: '#f3ecd9', fontSize: 16, paddingVertical: 12 },
+  cta: { marginTop: 36, backgroundColor: '#d6c9a8', height: 52, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
+  ctaPressed: { backgroundColor: '#c2b58f' },
+  ctaText: { color: '#0a0a0c', letterSpacing: 3, fontSize: 12, textTransform: 'uppercase', fontWeight: '600' },
+  link: { marginTop: 24, alignItems: 'center' },
+  linkText: { color: '#7a7568', fontSize: 12 },
 });
