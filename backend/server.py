@@ -186,9 +186,9 @@ def validate_portrait(img: Image.Image):
 
 async def ensure_local_library(city: str, region: str, country: str) -> dict:
     slug = library_slug(city, region, country)
-    existing = await db.local_libraries.find_one({"slug": slug}, {"_id": 0})
+    existing = await db.local_libraries.find_one({"slug": slug})
     if existing:
-        return existing
+        return {**existing, "id": existing["_id"]}
     lib = {
         "_id": str(ObjectId()),
         "slug": slug,
@@ -201,7 +201,7 @@ async def ensure_local_library(city: str, region: str, country: str) -> dict:
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.local_libraries.insert_one(lib)
-    return {k: v for k, v in lib.items() if k != "_id"} | {"id": lib["_id"]}
+    return {**lib, "id": lib["_id"]}
 
 
 def serialize_library(lib: dict) -> dict:

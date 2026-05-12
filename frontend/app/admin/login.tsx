@@ -33,12 +33,12 @@ export default function AdminLogin() {
         <View style={s.rule} />
 
         <Text style={s.label}>Curator identifier</Text>
-        <TextInput testID="admin-username" style={s.input} value={username} onChangeText={setUsername} autoCapitalize="none" placeholder="admin" placeholderTextColor="#4a4738" />
+        <TextInput testID="admin-username-input" style={s.input} value={username} onChangeText={setUsername} autoCapitalize="none" placeholder="admin" placeholderTextColor="#4a4738" />
 
         <Text style={s.label}>Passphrase</Text>
-        <TextInput testID="admin-password" style={s.input} value={password} onChangeText={setPassword} secureTextEntry placeholderTextColor="#4a4738" />
+        <TextInput testID="admin-password-input" style={s.input} value={password} onChangeText={setPassword} secureTextEntry placeholderTextColor="#4a4738" />
 
-        <Pressable testID="admin-submit" onPress={submit} style={({ pressed }) => [s.cta, pressed && s.ctaPressed]} disabled={loading}>
+        <Pressable testID="admin-submit-button" onPress={submit} style={({ pressed }) => [s.cta, pressed && s.ctaPressed]} disabled={loading}>
           {loading ? <ActivityIndicator color="#0a0a0c" /> : <Text style={s.ctaText}>Enter</Text>}
         </Pressable>
 

@@ -90,7 +90,7 @@ export default function Profile() {
         )}
       </View>
 
-      <Pressable testID="profile-logout" style={s.logout} onPress={() => Alert.alert('Leave the archive?', 'You can return any time.', [{ text: 'Stay' }, { text: 'Leave', style: 'destructive', onPress: logout }])}>
+      <Pressable testID="logout-button" style={s.logout} onPress={() => Alert.alert('Leave the archive?', 'You can return any time.', [{ text: 'Stay' }, { text: 'Leave', style: 'destructive', onPress: logout }])}>
         <Text style={s.logoutText}>Leave the archive</Text>
       </Pressable>
     </ScrollView>
