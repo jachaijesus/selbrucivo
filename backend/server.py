@@ -527,7 +527,21 @@ async def get_artwork(artwork_id: str, payload: dict = Depends(require_user)):
         raise HTTPException(status_code=404, detail="Artwork not found")
     if a["status"] != "approved" and a["uploader_id"] != payload["user_id"]:
         raise HTTPException(status_code=403, detail="Not visible")
-    return serialize_artwork(a)
+    serialized = serialize_artwork(a)
+    # Same Hand — up to three other approved works by the same creator in the same Local Library.
+    same_hand_docs = await db.artworks.find(
+        {
+            "uploader_id": a["uploader_id"],
+            "library_id": a.get("library_id"),
+            "status": "approved",
+            "_id": {"$ne": artwork_id},
+        },
+        {"_id": 1, "title": 1, "approved_at": 1},
+    ).sort("approved_at", -1).to_list(3)
+    serialized["same_hand"] = [
+        {"id": d["_id"], "title": d.get("title", "")} for d in same_hand_docs
+    ]
+    return serialized
 
 
 # ============= LIBRARIES =============

@@ -23,6 +23,7 @@ type Artwork = {
   approved_at: string | null;
   uploaded_at: string;
   status: string;
+  same_hand?: { id: string; title: string }[];
 };
 
 const GUILD_NUMERAL: Record<string, string> = { illustrator: 'I', animator: 'II', designer: 'III' };
@@ -159,6 +160,28 @@ export default function ArtworkDetail() {
           </FadeIn>
         ) : null}
 
+        {art.same_hand && art.same_hand.length > 0 ? (
+          <FadeIn duration={900} delay={800}>
+            <View style={s.sameHandWrap} testID="same-hand">
+              <Text style={s.sameHandLabel}>Same hand</Text>
+              <Text style={s.sameHandPrologue}>Also archived under {art.creator_name}, in this library.</Text>
+              <View style={s.sameHandList}>
+                {art.same_hand.map((w, i) => (
+                  <Pressable
+                    key={w.id}
+                    testID={`same-hand-${w.id}`}
+                    onPress={() => router.replace(`/artwork/${w.id}` as any)}
+                    style={s.sameHandRow}
+                  >
+                    <Text style={s.sameHandNumeral}>{['i', 'ii', 'iii'][i] || '·'}.</Text>
+                    <Text style={s.sameHandTitle}>{w.title}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </FadeIn>
+        ) : null}
+
         <FadeIn duration={900} delay={850}>
           <View style={s.footerRule} />
           <Text style={s.colophon}>Inscribed in the Selbrucivo archive · vol. i</Text>
@@ -208,6 +231,14 @@ const s = StyleSheet.create({
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   tagPill: { paddingHorizontal: space.s, paddingVertical: 5, borderWidth: 1, borderColor: palette.rule },
   tagText: { fontFamily: fonts.mono, fontSize: 10, color: palette.parchment, letterSpacing: 2, textTransform: 'uppercase' },
+
+  sameHandWrap: { marginTop: space.xxl, paddingTop: space.l, borderTopWidth: 1, borderTopColor: palette.rule },
+  sameHandLabel: { fontFamily: fonts.display, fontStyle: 'italic', color: palette.dim, fontSize: 13, letterSpacing: 0.5 },
+  sameHandPrologue: { fontFamily: fonts.sans, color: palette.faint, fontSize: 11, marginTop: space.xs, lineHeight: 16 },
+  sameHandList: { marginTop: space.base },
+  sameHandRow: { flexDirection: 'row', alignItems: 'baseline', paddingVertical: 6, gap: space.s },
+  sameHandNumeral: { fontFamily: fonts.display, fontStyle: 'italic', color: palette.faint, fontSize: 12, width: 18 },
+  sameHandTitle: { fontFamily: fonts.display, fontStyle: 'italic', color: palette.parchment, fontSize: 15, flex: 1 },
 
   footerRule: { height: 1, backgroundColor: palette.rule, marginTop: space.xxl, marginBottom: space.base, width: '100%' },
   colophon: { fontFamily: fonts.mono, fontSize: 9, color: palette.faint, letterSpacing: 4, textTransform: 'uppercase', textAlign: 'center' },
