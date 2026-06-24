@@ -1,0 +1,204 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #f6f2ea;
+  color: rgba(24, 48, 38, 0.78);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #f6f2ea;
+}
+
+button {
+  font: inherit;
+}
+
+.selbrucivo-shell {
+  --bg-saturation: 14%;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 48% 36%, hsl(141 var(--bg-saturation) 88% / 0.52), transparent 32rem),
+    radial-gradient(circle at 50% 100%, hsl(78 calc(var(--bg-saturation) * 0.72) 91% / 0.46), transparent 44rem),
+    linear-gradient(hsl(148 var(--bg-saturation) 54% / 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(148 var(--bg-saturation) 54% / 0.045) 1px, transparent 1px),
+    #f6f2ea;
+  background-size: auto, auto, 72px 72px, 72px 72px, auto;
+  transition: background 900ms ease;
+}
+
+.sphere-desktop {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.sphere-desktop:not(.is-locked) {
+  cursor: move;
+}
+
+.sphere-desktop.is-moving {
+  cursor: grabbing;
+}
+
+.sphere-desktop.is-locked {
+  cursor: grab;
+}
+
+.sphere-canvas {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  display: block;
+  outline: none;
+  filter: drop-shadow(0 0 42px rgba(66, 255, 129, 0.12));
+}
+
+.sphere-canvas canvas,
+canvas.sphere-canvas {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  display: block;
+}
+
+.sphere-controls {
+  position: absolute;
+  right: clamp(18px, 4vw, 48px);
+  bottom: clamp(18px, 4vw, 42px);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: rgba(30, 63, 49, 0.62);
+}
+
+.variant-switch,
+.lock-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.variant-switch {
+  padding: 4px;
+  border: 1px solid rgba(21, 92, 67, 0.16);
+  border-radius: 999px;
+  background: rgba(246, 242, 234, 0.42);
+  box-shadow: 0 8px 24px rgba(34, 71, 55, 0.06);
+}
+
+.variant-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(28, 67, 51, 0.52);
+  background: transparent;
+  font-size: 0.68rem;
+  letter-spacing: 0;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.variant-button:hover {
+  color: rgba(15, 75, 54, 0.78);
+  background: rgba(255, 252, 245, 0.62);
+}
+
+.variant-button:focus {
+  outline: none;
+}
+
+.variant-button:focus-visible {
+  outline: 1px solid rgba(21, 92, 67, 0.3);
+  outline-offset: 3px;
+}
+
+.variant-button.is-active {
+  color: rgba(15, 75, 54, 0.92);
+  background: rgba(255, 252, 245, 0.76);
+  box-shadow: 0 3px 12px rgba(34, 71, 55, 0.08);
+}
+
+.sphere-state {
+  min-width: 5.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: right;
+  opacity: 0.66;
+}
+
+.lock-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(125, 255, 164, 0.16);
+  border-radius: 50%;
+  color: rgba(20, 78, 57, 0.72);
+  background: rgba(246, 242, 234, 0.56);
+  box-shadow: 0 8px 26px rgba(34, 71, 55, 0.08);
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.lock-button:hover {
+  border-color: rgba(141, 255, 176, 0.32);
+  color: rgba(12, 78, 55, 0.9);
+  background: rgba(255, 252, 245, 0.78);
+}
+
+.lock-button:focus {
+  outline: none;
+}
+
+.lock-button:focus-visible {
+  outline: 1px solid rgba(21, 92, 67, 0.34);
+  outline-offset: 4px;
+}
+
+.lock-button.is-locked {
+  border-color: rgba(21, 92, 67, 0.28);
+  color: rgba(16, 80, 58, 0.86);
+  box-shadow: 0 8px 28px rgba(34, 71, 55, 0.1);
+}
+
+@media (max-width: 760px) {
+  .sphere-controls {
+    right: 18px;
+    bottom: 18px;
+    gap: 12px;
+  }
+}
