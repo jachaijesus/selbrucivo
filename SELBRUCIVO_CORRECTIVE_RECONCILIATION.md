@@ -5,6 +5,14 @@
 
 ---
 
+## Repository Reconciliation Note
+
+During Phase 4D.5 Git reconciliation, the root repository was confirmed as the canonical location for the current Vite/React interactive sphere app. The earlier Emergent.ai implementation is preserved as historical production prototype material under `archive/emergent-ai-first-iteration/`.
+
+The archive is intentionally separated from the active root app so it can remain available for reference without creating a duplicate app structure or competing source of truth. Generated cache material, credential/token/env files, local machine configuration, nested Git repositories, and the duplicate Vite app folder are intentionally excluded from the archive.
+
+---
+
 ## EXECUTIVE SUMMARY
 
 Selbrucivo has been reconciled against its core philosophical identity as **"The academia of self — a ritualized, timezone-locked, authority-curated wellness interface."** All engagement-oriented, social, and real-time interaction features have been removed or disabled to enforce:
