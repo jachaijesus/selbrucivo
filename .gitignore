@@ -3,3 +3,17 @@
 .pnpm-store/
 node_modules/
 dist/
+.env
+.env.*
+*.env
+*token.json*
+*credentials.json*
+__pycache__/
+*.pyc
+.venv/
+venv/
+.cache/
+.metro-cache/
+frontend/.metro-cache/
+coverage/
+*.tsbuildinfo
