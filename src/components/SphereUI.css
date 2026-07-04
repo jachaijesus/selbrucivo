@@ -1,0 +1,1187 @@
+:root {
+  color-scheme: dark;
+  background: #020304;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #020304;
+}
+
+button {
+  font: inherit;
+}
+
+.ascii-shell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #21f58a;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(33, 245, 138, 0.11), transparent 33rem),
+    radial-gradient(circle at 72% 22%, rgba(53, 233, 255, 0.08), transparent 18rem),
+    radial-gradient(circle at 32% 78%, rgba(118, 87, 155, 0.11), transparent 24rem),
+    linear-gradient(rgba(33, 245, 138, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(53, 233, 255, 0.028) 1px, transparent 1px),
+    #020304;
+  background-size: auto, auto, auto, 34px 34px, 34px 34px, auto;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.ascii-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(92vw, 760px);
+  height: min(92vh, 760px);
+}
+
+.pathway-orientation-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pathway-label {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.6rem;
+  color: rgba(180, 229, 221, 0.54);
+  font-size: clamp(0.56rem, 0.72vw, 0.68rem);
+  letter-spacing: 0.22em;
+  line-height: 1;
+  text-align: center;
+  text-shadow:
+    0 0 10px rgba(53, 233, 255, 0.2),
+    0 0 22px rgba(33, 245, 138, 0.08);
+  text-transform: uppercase;
+  transition:
+    color 220ms ease,
+    opacity 220ms ease,
+    text-shadow 220ms ease,
+    transform 420ms ease;
+}
+
+.pathway-label::before,
+.pathway-label::after {
+  display: block;
+  width: clamp(0.55rem, 1.4vw, 1.1rem);
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(240, 211, 106, 0.48), transparent);
+  opacity: 0.72;
+}
+
+.pathway-label::before {
+  margin-right: 0.62rem;
+}
+
+.pathway-label::after {
+  margin-left: 0.62rem;
+}
+
+.pathway-label-north {
+  left: 50%;
+  top: clamp(5.8rem, 18vh, 8.8rem);
+  transform: translateX(-50%);
+}
+
+.pathway-label-south {
+  left: 50%;
+  bottom: clamp(5.3rem, 16vh, 8.2rem);
+  color: rgba(240, 211, 106, 0.52);
+  transform: translateX(-50%);
+}
+
+.pathway-label-east {
+  right: clamp(2.4rem, 8vw, 8.2rem);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.pathway-label-west {
+  left: clamp(2.4rem, 8vw, 8.2rem);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.pathway-trigger {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  pointer-events: auto;
+}
+
+.pathway-trigger:focus {
+  outline: none;
+}
+
+.pathway-trigger:focus-visible {
+  color: rgba(240, 211, 106, 0.78);
+  text-shadow:
+    0 0 12px rgba(240, 211, 106, 0.24),
+    0 0 28px rgba(53, 233, 255, 0.16);
+}
+
+.pathway-trigger[data-pathway-state="hover"],
+.pathway-trigger[data-pathway-state="focused"] {
+  color: rgba(213, 251, 244, 0.78);
+  text-shadow:
+    0 0 12px rgba(53, 233, 255, 0.34),
+    0 0 26px rgba(33, 245, 138, 0.16);
+}
+
+.pathway-trigger[data-pathway-state="selected"],
+.pathway-trigger[data-pathway-state="expanded"],
+.pathway-trigger[data-pathway-state="routing"],
+.pathway-trigger[data-pathway-state="holding"],
+.pathway-trigger[data-pathway-state="composing"],
+.pathway-trigger[data-pathway-state="revising"],
+.pathway-trigger[data-pathway-state="linking"],
+.pathway-trigger[data-pathway-state="completing"] {
+  color: rgba(240, 211, 106, 0.9);
+  text-shadow:
+    0 0 14px rgba(240, 211, 106, 0.34),
+    0 0 34px rgba(53, 233, 255, 0.2);
+}
+
+.pathway-state-hover .pathway-trigger::before,
+.pathway-state-hover .pathway-trigger::after,
+.pathway-state-focused .pathway-trigger::before,
+.pathway-state-focused .pathway-trigger::after,
+.pathway-trigger[data-pathway-state="selected"]::before,
+.pathway-trigger[data-pathway-state="selected"]::after,
+.pathway-trigger[data-pathway-state="expanded"]::before,
+.pathway-trigger[data-pathway-state="expanded"]::after,
+.pathway-trigger[data-pathway-state="routing"]::before,
+.pathway-trigger[data-pathway-state="routing"]::after,
+.pathway-trigger[data-pathway-state="holding"]::before,
+.pathway-trigger[data-pathway-state="holding"]::after,
+.pathway-trigger[data-pathway-state="composing"]::before,
+.pathway-trigger[data-pathway-state="composing"]::after,
+.pathway-trigger[data-pathway-state="revising"]::before,
+.pathway-trigger[data-pathway-state="revising"]::after,
+.pathway-trigger[data-pathway-state="linking"]::before,
+.pathway-trigger[data-pathway-state="linking"]::after,
+.pathway-trigger[data-pathway-state="completing"]::before,
+.pathway-trigger[data-pathway-state="completing"]::after {
+  opacity: 1;
+  background: linear-gradient(90deg, transparent, rgba(53, 233, 255, 0.7), rgba(240, 211, 106, 0.52), transparent);
+}
+
+.pathway-active .pathway-label[data-pathway-state="inactive"],
+.pathway-state-selected .pathway-label:not(.pathway-trigger),
+.pathway-state-expanded .pathway-label:not(.pathway-trigger),
+.pathway-state-routing .pathway-label:not(.pathway-trigger),
+.pathway-state-holding .pathway-label:not(.pathway-trigger),
+.pathway-state-composing .pathway-label:not(.pathway-trigger),
+.pathway-state-revising .pathway-label:not(.pathway-trigger),
+.pathway-state-linking .pathway-label:not(.pathway-trigger),
+.pathway-state-completing .pathway-label:not(.pathway-trigger) {
+  opacity: 0.32;
+  color: rgba(180, 229, 221, 0.26);
+  text-shadow: 0 0 8px rgba(53, 233, 255, 0.08);
+}
+
+.archive-state-selected .pathway-label-north,
+.archive-state-expanded .pathway-label-north,
+.archive-state-routing .pathway-label-north,
+.archive-state-holding .pathway-label-north {
+  transform: translateX(-50%) translateY(-0.4rem);
+}
+
+.library-state-selected .pathway-label-south,
+.library-state-expanded .pathway-label-south,
+.library-state-routing .pathway-label-south,
+.library-state-holding .pathway-label-south {
+  transform: translateX(-50%) translateY(0.4rem);
+}
+
+.train-station-state-selected .pathway-label-east,
+.train-station-state-expanded .pathway-label-east,
+.train-station-state-routing .pathway-label-east,
+.train-station-state-holding .pathway-label-east {
+  transform: translateY(-50%) translateX(0.4rem);
+}
+
+.essays-state-selected .pathway-label-west,
+.essays-state-expanded .pathway-label-west,
+.essays-state-routing .pathway-label-west,
+.essays-state-holding .pathway-label-west,
+.essays-state-composing .pathway-label-west,
+.essays-state-revising .pathway-label-west,
+.essays-state-linking .pathway-label-west,
+.essays-state-completing .pathway-label-west {
+  transform: translateY(-50%) translateX(-0.4rem);
+}
+
+.library-pathway-trigger[data-pathway-state="hover"],
+.library-pathway-trigger[data-pathway-state="focused"] {
+  color: rgba(222, 255, 246, 0.84);
+  text-shadow:
+    0 0 14px rgba(53, 233, 255, 0.38),
+    0 0 30px rgba(33, 245, 138, 0.2);
+}
+
+.library-pathway-trigger[data-pathway-state="selected"],
+.library-pathway-trigger[data-pathway-state="expanded"],
+.library-pathway-trigger[data-pathway-state="routing"],
+.library-pathway-trigger[data-pathway-state="holding"] {
+  color: rgba(225, 252, 242, 0.92);
+  text-shadow:
+    0 0 16px rgba(53, 233, 255, 0.34),
+    0 0 38px rgba(33, 245, 138, 0.18),
+    0 0 18px rgba(240, 211, 106, 0.16);
+}
+
+.train-station-pathway-trigger[data-pathway-state="hover"],
+.train-station-pathway-trigger[data-pathway-state="focused"] {
+  color: rgba(224, 246, 238, 0.82);
+  text-shadow:
+    0 0 14px rgba(240, 211, 106, 0.26),
+    0 0 28px rgba(53, 233, 255, 0.18);
+}
+
+.train-station-pathway-trigger[data-pathway-state="selected"],
+.train-station-pathway-trigger[data-pathway-state="expanded"],
+.train-station-pathway-trigger[data-pathway-state="routing"],
+.train-station-pathway-trigger[data-pathway-state="holding"] {
+  color: rgba(239, 230, 176, 0.92);
+  text-shadow:
+    0 0 16px rgba(240, 211, 106, 0.3),
+    0 0 34px rgba(53, 233, 255, 0.18);
+}
+
+.essays-pathway-trigger[data-pathway-state="hover"],
+.essays-pathway-trigger[data-pathway-state="focused"] {
+  color: rgba(229, 223, 205, 0.84);
+  text-shadow:
+    0 0 14px rgba(240, 211, 106, 0.24),
+    0 0 28px rgba(118, 87, 155, 0.22);
+}
+
+.essays-pathway-trigger[data-pathway-state="selected"],
+.essays-pathway-trigger[data-pathway-state="expanded"],
+.essays-pathway-trigger[data-pathway-state="routing"],
+.essays-pathway-trigger[data-pathway-state="holding"],
+.essays-pathway-trigger[data-pathway-state="composing"],
+.essays-pathway-trigger[data-pathway-state="revising"],
+.essays-pathway-trigger[data-pathway-state="linking"],
+.essays-pathway-trigger[data-pathway-state="completing"] {
+  color: rgba(236, 222, 178, 0.94);
+  text-shadow:
+    0 0 15px rgba(240, 211, 106, 0.26),
+    0 0 34px rgba(118, 87, 155, 0.2);
+}
+
+.ascii-sphere-canvas {
+  position: relative;
+  z-index: 1;
+  max-width: 92vw;
+  max-height: 82vh;
+  border: 1px solid rgba(33, 245, 138, 0.18);
+  border-radius: 50%;
+  cursor: grab;
+  image-rendering: auto;
+  touch-action: none;
+  filter:
+    drop-shadow(0 0 16px rgba(33, 245, 138, 0.28))
+    drop-shadow(0 0 36px rgba(53, 233, 255, 0.12));
+}
+
+.pathway-state-hover .ascii-sphere-canvas,
+.pathway-state-focused .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 20px rgba(33, 245, 138, 0.34))
+    drop-shadow(0 0 42px rgba(53, 233, 255, 0.16));
+}
+
+.pathway-state-selected .ascii-sphere-canvas,
+.pathway-state-expanded .ascii-sphere-canvas,
+.pathway-state-routing .ascii-sphere-canvas,
+.pathway-state-holding .ascii-sphere-canvas,
+.pathway-state-composing .ascii-sphere-canvas,
+.pathway-state-revising .ascii-sphere-canvas,
+.pathway-state-linking .ascii-sphere-canvas,
+.pathway-state-completing .ascii-sphere-canvas {
+  cursor: default;
+  filter:
+    drop-shadow(0 0 22px rgba(240, 211, 106, 0.22))
+    drop-shadow(0 0 46px rgba(53, 233, 255, 0.18));
+}
+
+.pathway-state-expanded .ascii-sphere-canvas,
+.pathway-state-routing .ascii-sphere-canvas,
+.pathway-state-holding .ascii-sphere-canvas,
+.pathway-state-composing .ascii-sphere-canvas,
+.pathway-state-revising .ascii-sphere-canvas,
+.pathway-state-linking .ascii-sphere-canvas,
+.pathway-state-completing .ascii-sphere-canvas {
+  opacity: 0.72;
+}
+
+.library-state-hover .ascii-sphere-canvas,
+.library-state-focused .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 22px rgba(33, 245, 138, 0.38))
+    drop-shadow(0 0 48px rgba(53, 233, 255, 0.2));
+}
+
+.library-state-selected .ascii-sphere-canvas,
+.library-state-expanded .ascii-sphere-canvas,
+.library-state-routing .ascii-sphere-canvas,
+.library-state-holding .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 24px rgba(53, 233, 255, 0.24))
+    drop-shadow(0 0 52px rgba(33, 245, 138, 0.18));
+}
+
+.train-station-state-hover .ascii-sphere-canvas,
+.train-station-state-focused .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 20px rgba(240, 211, 106, 0.26))
+    drop-shadow(0 0 44px rgba(53, 233, 255, 0.16));
+}
+
+.train-station-state-selected .ascii-sphere-canvas,
+.train-station-state-expanded .ascii-sphere-canvas,
+.train-station-state-routing .ascii-sphere-canvas,
+.train-station-state-holding .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 24px rgba(240, 211, 106, 0.24))
+    drop-shadow(0 0 52px rgba(53, 233, 255, 0.16));
+}
+
+.essays-state-hover .ascii-sphere-canvas,
+.essays-state-focused .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 19px rgba(240, 211, 106, 0.22))
+    drop-shadow(0 0 42px rgba(118, 87, 155, 0.18));
+}
+
+.essays-state-selected .ascii-sphere-canvas,
+.essays-state-expanded .ascii-sphere-canvas,
+.essays-state-routing .ascii-sphere-canvas,
+.essays-state-holding .ascii-sphere-canvas,
+.essays-state-composing .ascii-sphere-canvas,
+.essays-state-revising .ascii-sphere-canvas,
+.essays-state-linking .ascii-sphere-canvas,
+.essays-state-completing .ascii-sphere-canvas {
+  filter:
+    drop-shadow(0 0 23px rgba(240, 211, 106, 0.2))
+    drop-shadow(0 0 50px rgba(118, 87, 155, 0.18));
+}
+
+.ascii-sphere-canvas:active {
+  cursor: grabbing;
+}
+
+.pathway-state-selected .ascii-sphere-canvas:active,
+.pathway-state-expanded .ascii-sphere-canvas:active,
+.pathway-state-routing .ascii-sphere-canvas:active,
+.pathway-state-holding .ascii-sphere-canvas:active,
+.pathway-state-composing .ascii-sphere-canvas:active,
+.pathway-state-revising .ascii-sphere-canvas:active,
+.pathway-state-linking .ascii-sphere-canvas:active,
+.pathway-state-completing .ascii-sphere-canvas:active {
+  cursor: default;
+}
+
+.pathway-metadata,
+.pathway-entry-panel,
+.pathway-environment {
+  position: fixed;
+  z-index: 3;
+  color: rgba(213, 251, 244, 0.74);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  line-height: 1.75;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 10px rgba(53, 233, 255, 0.16),
+    0 0 24px rgba(33, 245, 138, 0.08);
+}
+
+.pathway-metadata {
+  left: 50%;
+  top: clamp(7.4rem, 23vh, 12rem);
+  display: grid;
+  gap: 0.55rem;
+  min-width: min(82vw, 25rem);
+  text-align: center;
+  transform: translateX(-50%);
+  animation: pathway-signal-arrival 260ms ease both;
+  pointer-events: none;
+}
+
+.pathway-meta-group {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.pathway-meta-focus {
+  color: rgba(240, 211, 106, 0.7);
+}
+
+.library-metadata {
+  top: auto;
+  bottom: clamp(7.1rem, 21vh, 11.4rem);
+}
+
+.library-metadata .pathway-meta-focus {
+  color: rgba(213, 251, 244, 0.74);
+}
+
+.train-station-metadata {
+  left: auto;
+  right: clamp(1rem, 6vw, 7rem);
+  top: 50%;
+  min-width: min(80vw, 21rem);
+  text-align: left;
+  transform: translateY(-50%);
+  animation: train-station-signal-arrival 260ms ease both;
+}
+
+.train-station-metadata .pathway-meta-focus {
+  color: rgba(239, 230, 176, 0.72);
+}
+
+.essays-metadata {
+  left: clamp(1rem, 6vw, 7rem);
+  top: 50%;
+  min-width: min(80vw, 22rem);
+  text-align: left;
+  transform: translateY(-50%);
+  animation: essays-signal-arrival 280ms ease both;
+}
+
+.essays-metadata .pathway-meta-focus {
+  color: rgba(236, 222, 178, 0.72);
+}
+
+.pathway-entry-panel {
+  right: clamp(1rem, 6vw, 7rem);
+  top: 50%;
+  display: grid;
+  gap: 0.32rem;
+  width: min(18rem, 36vw);
+  transform: translateY(-50%);
+  animation: pathway-entry-arrival 360ms ease both;
+}
+
+.library-entry-panel {
+  left: clamp(1rem, 6vw, 7rem);
+  right: auto;
+}
+
+.train-station-entry-panel {
+  left: clamp(1rem, 6vw, 7rem);
+  right: auto;
+}
+
+.essays-entry-panel {
+  right: clamp(1rem, 6vw, 7rem);
+}
+
+.pathway-action-control,
+.pathway-return-control,
+.pathway-inline-action,
+.pathway-section-tab,
+.pathway-material-control {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(240, 211, 106, 0.72);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: left;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 10px rgba(240, 211, 106, 0.18),
+    0 0 22px rgba(53, 233, 255, 0.08);
+  transition:
+    color 180ms ease,
+    opacity 180ms ease,
+    text-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.pathway-action-control {
+  margin-top: 0.48rem;
+}
+
+.pathway-action-control:hover,
+.pathway-action-control:focus-visible,
+.pathway-return-control:hover,
+.pathway-return-control:focus-visible,
+.pathway-inline-action:hover,
+.pathway-inline-action:focus-visible,
+.pathway-section-tab:hover,
+.pathway-section-tab:focus-visible,
+.pathway-material-control:hover,
+.pathway-material-control:focus-visible {
+  color: rgba(213, 251, 244, 0.9);
+  text-shadow:
+    0 0 12px rgba(53, 233, 255, 0.32),
+    0 0 26px rgba(240, 211, 106, 0.14);
+  transform: translateY(-1px);
+}
+
+.pathway-action-control:focus,
+.pathway-return-control:focus,
+.pathway-inline-action:focus,
+.pathway-section-tab:focus,
+.pathway-material-control:focus {
+  outline: none;
+}
+
+.pathway-action-control:focus-visible,
+.pathway-return-control:focus-visible,
+.pathway-inline-action:focus-visible,
+.pathway-section-tab:focus-visible,
+.pathway-material-control:focus-visible {
+  outline: 1px solid rgba(240, 211, 106, 0.46);
+  outline-offset: 4px;
+}
+
+.pathway-environment {
+  left: clamp(1rem, 4.5vw, 5.6rem);
+  right: clamp(1rem, 4.5vw, 5.6rem);
+  bottom: clamp(4.8rem, 9vh, 7rem);
+  display: grid;
+  gap: 0.82rem;
+  max-height: min(48vh, 28rem);
+  overflow: auto;
+  padding-top: 0.84rem;
+  border-top: 1px solid rgba(53, 233, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(2, 3, 4, 0.78), rgba(2, 3, 4, 0.42) 72%, transparent);
+  scrollbar-color: rgba(53, 233, 255, 0.28) transparent;
+  animation: pathway-environment-open 420ms ease both;
+}
+
+.pathway-environment.is-returning {
+  animation: pathway-environment-return 760ms ease both;
+  pointer-events: none;
+}
+
+.pathway-environment-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pathway-environment-title {
+  color: rgba(213, 251, 244, 0.9);
+  font-size: 0.78rem;
+}
+
+.pathway-environment-header > div,
+.pathway-environment-section {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.pathway-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem 1rem;
+  padding-bottom: 0.24rem;
+  border-bottom: 1px solid rgba(53, 233, 255, 0.13);
+}
+
+.pathway-menu-tabs {
+  gap: clamp(0.8rem, 3vw, 2.2rem);
+}
+
+.pathway-section-tab {
+  color: rgba(180, 229, 221, 0.58);
+}
+
+.pathway-section-tab.is-active,
+.pathway-material-control.is-active {
+  color: rgba(240, 211, 106, 0.78);
+  text-shadow:
+    0 0 11px rgba(240, 211, 106, 0.2),
+    0 0 22px rgba(53, 233, 255, 0.08);
+}
+
+.pathway-routing-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.12rem 1.25rem;
+  color: rgba(239, 230, 176, 0.72);
+}
+
+.pathway-focus-panel {
+  display: grid;
+  gap: 0.82rem;
+}
+
+.pathway-focus-lead {
+  display: grid;
+  gap: 0.1rem;
+  max-width: min(100%, 36rem);
+  color: rgba(213, 251, 244, 0.82);
+}
+
+.pathway-material-columns,
+.pathway-action-groups,
+.pathway-connections-panel,
+.pathway-doctrine-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: clamp(0.9rem, 3vw, 2.4rem);
+  align-items: start;
+}
+
+.pathway-action-groups {
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+}
+
+.pathway-related-materials,
+.pathway-live-relationships,
+.pathway-material-context {
+  color: rgba(180, 229, 221, 0.62);
+}
+
+.pathway-environment-section.is-secondary-group {
+  opacity: 0.72;
+}
+
+.pathway-section-title {
+  margin-bottom: 0.2rem;
+  color: rgba(53, 233, 255, 0.58);
+}
+
+.pathway-primary-section {
+  min-width: min(100%, 14rem);
+}
+
+.pathway-material-control {
+  color: rgba(213, 251, 244, 0.68);
+}
+
+.pathway-relationships {
+  color: rgba(180, 229, 221, 0.58);
+}
+
+.nested-panel {
+  display: grid;
+  gap: 0.62rem;
+  max-width: min(100%, 54rem);
+  padding-top: 0.72rem;
+  border-top: 1px solid rgba(53, 233, 255, 0.14);
+  color: rgba(213, 251, 244, 0.72);
+  animation: pathway-signal-arrival 260ms ease both;
+}
+
+.nested-panel-heading {
+  display: grid;
+  gap: 0.08rem;
+  color: rgba(213, 251, 244, 0.86);
+}
+
+.nested-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: clamp(0.8rem, 2.6vw, 2rem);
+  align-items: start;
+}
+
+.nested-panel-group {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.section-view-panel {
+  border-top-color: rgba(53, 233, 255, 0.16);
+}
+
+.material-view-panel {
+  border-top-color: rgba(240, 211, 106, 0.2);
+  color: rgba(239, 230, 176, 0.72);
+}
+
+.nested-panel-relationships {
+  color: rgba(180, 229, 221, 0.64);
+}
+
+.library-environment {
+  max-height: min(46vh, 25rem);
+  border-top-color: rgba(33, 245, 138, 0.26);
+  background:
+    linear-gradient(180deg, rgba(2, 3, 4, 0.72), rgba(2, 3, 4, 0.34) 70%, transparent),
+    linear-gradient(90deg, rgba(53, 233, 255, 0.04), transparent 28%, rgba(33, 245, 138, 0.035));
+}
+
+.train-station-environment {
+  max-height: min(50vh, 28rem);
+  border-top-color: rgba(240, 211, 106, 0.24);
+  background:
+    linear-gradient(180deg, rgba(2, 3, 4, 0.76), rgba(2, 3, 4, 0.4) 72%, transparent),
+    repeating-linear-gradient(
+      90deg,
+      rgba(240, 211, 106, 0.035) 0,
+      rgba(240, 211, 106, 0.035) 1px,
+      transparent 1px,
+      transparent 3.1rem
+    );
+}
+
+.essays-environment {
+  max-height: min(52vh, 29rem);
+  border-top-color: rgba(236, 222, 178, 0.24);
+  color: rgba(229, 223, 205, 0.74);
+  background:
+    linear-gradient(180deg, rgba(2, 3, 4, 0.8), rgba(2, 3, 4, 0.46) 72%, transparent),
+    repeating-linear-gradient(
+      180deg,
+      rgba(236, 222, 178, 0.032) 0,
+      rgba(236, 222, 178, 0.032) 1px,
+      transparent 1px,
+      transparent 1.72rem
+    ),
+    linear-gradient(90deg, rgba(118, 87, 155, 0.055), transparent 34%, rgba(240, 211, 106, 0.035));
+  scrollbar-color: rgba(236, 222, 178, 0.28) transparent;
+}
+
+.essays-environment .pathway-section-tabs {
+  border-bottom-color: rgba(236, 222, 178, 0.14);
+}
+
+.essays-environment .pathway-section-title {
+  color: rgba(236, 222, 178, 0.66);
+}
+
+.essays-environment .pathway-material-control {
+  color: rgba(229, 223, 205, 0.7);
+}
+
+.essays-environment .pathway-routing-status {
+  color: rgba(236, 222, 178, 0.74);
+}
+
+.essays-state-composing .ascii-sphere-canvas {
+  opacity: 0.54;
+  filter:
+    drop-shadow(0 0 18px rgba(236, 222, 178, 0.14))
+    drop-shadow(0 0 34px rgba(118, 87, 155, 0.12));
+}
+
+.essays-state-revising .essays-environment {
+  background:
+    linear-gradient(180deg, rgba(2, 3, 4, 0.82), rgba(2, 3, 4, 0.48) 72%, transparent),
+    repeating-linear-gradient(
+      90deg,
+      rgba(236, 222, 178, 0.038) 0,
+      rgba(236, 222, 178, 0.038) 1px,
+      transparent 1px,
+      transparent 2.4rem
+    ),
+    linear-gradient(90deg, rgba(118, 87, 155, 0.06), transparent 36%, rgba(240, 211, 106, 0.03));
+}
+
+@keyframes pathway-signal-arrival {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.35rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes pathway-entry-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-50% + 0.35rem));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes train-station-signal-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-50% + 0.35rem));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes essays-signal-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-50% + 0.35rem));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes pathway-environment-open {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pathway-environment-return {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(0.55rem);
+  }
+}
+
+.crt-haze {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.035) 0,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  mix-blend-mode: screen;
+  opacity: 0.22;
+}
+
+.crt-haze::after {
+  position: absolute;
+  inset: -18%;
+  content: "";
+  background: radial-gradient(circle, transparent 48%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+.ascii-panel {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(18px, 4vh, 34px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: translateX(-50%);
+  animation: ascii-control-drift 4.8s ease-in-out infinite;
+}
+
+.ascii-panel::before,
+.ascii-panel::after {
+  content: none;
+}
+
+.ascii-panel-label {
+  order: 2;
+  color: rgba(53, 233, 255, 0.48);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(53, 233, 255, 0.12);
+}
+
+.ascii-size-selector {
+  order: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.ascii-return-control {
+  order: 3;
+  margin-top: 0.38rem;
+  border: 0;
+  background: transparent;
+  color: rgba(180, 229, 221, 0.48);
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: lowercase;
+  text-shadow: 0 0 8px rgba(53, 233, 255, 0.12);
+  transition:
+    color 180ms ease,
+    opacity 180ms ease,
+    text-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.ascii-return-control:hover:not(:disabled),
+.ascii-return-control:focus-visible:not(:disabled) {
+  color: rgba(240, 211, 106, 0.78);
+  text-shadow:
+    0 0 12px rgba(240, 211, 106, 0.22),
+    0 0 24px rgba(53, 233, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.ascii-return-control:focus {
+  outline: none;
+}
+
+.ascii-return-control:focus-visible {
+  outline: 1px solid rgba(240, 211, 106, 0.46);
+  outline-offset: 4px;
+}
+
+.ascii-return-control:disabled {
+  cursor: default;
+  opacity: 0.34;
+}
+
+.ascii-size-node {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.ascii-size-node::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  content: "";
+  border: 1px solid rgba(53, 233, 255, 0.34);
+  border-radius: 50%;
+  background: rgba(2, 3, 4, 0.82);
+  box-shadow: 0 0 8px rgba(53, 233, 255, 0.12);
+  transform: translate(-50%, -50%);
+}
+
+.ascii-size-node::after {
+  content: none;
+}
+
+.ascii-size-node:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ascii-size-node:hover:not(:disabled)::before {
+  border-color: rgba(240, 211, 106, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(240, 211, 106, 0.26),
+    0 0 16px rgba(240, 211, 106, 0.38);
+}
+
+.ascii-size-node:focus {
+  outline: none;
+}
+
+.ascii-size-node:focus-visible::before {
+  outline: 1px solid rgba(240, 211, 106, 0.58);
+  outline-offset: 4px;
+}
+
+.ascii-size-node.is-filled::before {
+  border-color: rgba(33, 245, 138, 0.72);
+  background: #21f58a;
+  box-shadow:
+    0 0 0 1px rgba(33, 245, 138, 0.24),
+    0 0 13px rgba(33, 245, 138, 0.32);
+}
+
+.ascii-size-node.is-active::before {
+  border-color: rgba(240, 211, 106, 0.86);
+  background: #f0d36a;
+  box-shadow:
+    0 0 0 1px rgba(240, 211, 106, 0.45),
+    0 0 15px rgba(240, 211, 106, 0.28);
+}
+
+.ascii-size-node.is-postponed {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.ascii-size-node.is-postponed::before {
+  border-color: rgba(118, 87, 155, 0.32);
+  background: rgba(2, 3, 4, 0.72);
+}
+
+@keyframes ascii-control-drift {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+
+@media (max-width: 720px) {
+  .ascii-stage {
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .pathway-label {
+    min-width: 3.8rem;
+    font-size: 0.54rem;
+    letter-spacing: 0.18em;
+  }
+
+  .pathway-label-north {
+    top: clamp(5.6rem, 17vh, 7.4rem);
+  }
+
+  .pathway-label-south {
+    bottom: clamp(4.9rem, 14vh, 6.8rem);
+  }
+
+  .pathway-label-east,
+  .pathway-label-west {
+    top: 50%;
+    min-width: auto;
+    writing-mode: vertical-rl;
+  }
+
+  .pathway-label-east::before,
+  .pathway-label-east::after,
+  .pathway-label-west::before,
+  .pathway-label-west::after {
+    width: 1px;
+    height: 0.7rem;
+    background: linear-gradient(180deg, transparent, rgba(240, 211, 106, 0.44), transparent);
+  }
+
+  .pathway-label-east::before,
+  .pathway-label-west::before {
+    margin-right: 0;
+    margin-bottom: 0.48rem;
+  }
+
+  .pathway-label-east::after,
+  .pathway-label-west::after {
+    margin-top: 0.48rem;
+    margin-left: 0;
+  }
+
+  .pathway-label-east {
+    right: clamp(0.68rem, 3.8vw, 1.25rem);
+  }
+
+  .pathway-label-west {
+    left: clamp(0.68rem, 3.8vw, 1.25rem);
+    writing-mode: vertical-lr;
+  }
+
+  .pathway-metadata {
+    top: clamp(7rem, 22vh, 9.2rem);
+    min-width: min(88vw, 19rem);
+    font-size: 0.56rem;
+  }
+
+  .train-station-metadata,
+  .essays-metadata {
+    left: 50%;
+    right: auto;
+    top: clamp(7rem, 22vh, 9.2rem);
+    text-align: center;
+    transform: translateX(-50%);
+    animation: pathway-signal-arrival 260ms ease both;
+  }
+
+  .pathway-entry-panel {
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: clamp(5.4rem, 13vh, 7.2rem);
+    width: min(82vw, 18rem);
+    text-align: center;
+    transform: translateX(-50%);
+    animation: pathway-signal-arrival 360ms ease both;
+  }
+
+  .pathway-entry-panel .pathway-action-control {
+    text-align: center;
+  }
+
+  .pathway-environment {
+    left: 1rem;
+    right: 1rem;
+    bottom: 4.4rem;
+    max-height: min(48vh, 24rem);
+    font-size: 0.56rem;
+  }
+
+  .pathway-environment-header {
+    display: grid;
+  }
+
+  .pathway-material-columns,
+  .pathway-action-groups,
+  .pathway-connections-panel,
+  .pathway-doctrine-panel {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .ascii-panel {
+    bottom: 14px;
+    gap: 5px;
+  }
+
+  .ascii-size-selector {
+    gap: 10px;
+  }
+}
