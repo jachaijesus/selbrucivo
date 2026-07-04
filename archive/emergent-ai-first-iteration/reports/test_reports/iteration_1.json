@@ -1,0 +1,49 @@
+{
+  "summary": "Phase 2 Selbrucivo platform tested. Backend: 34/34 pytest cases pass on the public URL covering auth, onboarding, admin auth, portrait-validation upload, feed scopes, mine, library/me, moderation (approve/reject) round-trip, metrics, and verification that no engagement endpoints (likes/comments/followers/reactions/messages/wallpapers/classes/check_ins) exist. Frontend: testuser/password123 login → /ambient works; Local/Global scope and All/Ill/Anim/Des filter chips render; bottom-tab Library shows 'Tampa, FL · USA', '9 works archived', '1 MEMBERS', and guild breakdown; Profile shows IDENTIFIER, Guild/Library, 9 ARCHIVED/3 PENDING/1 WITHHELD with status-tagged inscriptions; Upload tab renders form with file picker and validation copy; Admin login screen renders with credentials form. A critical backend bug found via code review (see RCA).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/auth/onboarding", "issue": "ensure_local_library() uses find_one({'slug': slug}, {'_id': 0}) — excludes _id when an existing library is found. The caller then computes library_id = library.get('id') or library.get('_id') which is None. The user is then saved with library_id=None and the existing library's member/guild counters are never incremented. Only the FIRST onboarder to a city gets a valid library_id. Every subsequent user joining the same city is silently broken (no feed, library/me 404, uploads inherit library_id=None).", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "/api/auth/me", "issue": "Verbose check passes, but library_id stored on user may be the actual Mongo _id (string) — works only because new libraries are inserted with our generated _id."},
+      {"endpoint": "GET /api/artworks/{id}", "issue": "Returns 403 'Not visible' for pending artworks even to the uploader if the uploader_id comparison is wrong, but currently looks correct; ok."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Register screen", "issue": "Submit may not have data-testid='register-submit-button' OR click did not fire (URL stayed on /auth/register). Could not verify register→/onboarding routing via Playwright. Please confirm submit button data-testid and re-test.", "selector": "[data-testid='register-submit-button']", "priority": "MEDIUM"},
+      {"component": "Profile logout", "issue": "Logout control labeled 'LEAVE THE ARCHIVE' lacks data-testid='logout-button'. Add data-testid to make the logout flow testable.", "selector": "[data-testid='logout-button']", "priority": "LOW"},
+      {"component": "Admin login", "issue": "Could not confirm submit testid. Fields visible but testids data-testid='admin-username-input'/'admin-password-input'/'admin-submit-button' did not match. Please verify/add.", "selector": "[data-testid='admin-submit-button']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ambient", "issues": ["Bottom-tab nav icons have no visible labels and very low contrast against the ambient artwork; first-time users may not realize they are tabs."]},
+      {"screen": "Global console warnings", "issues": ["React Native Web emits 'props.pointerEvents is deprecated' and 'shadow* style props deprecated' on every screen. Cosmetic but worth cleaning."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX: In server.py ensure_local_library(), drop the {'_id': 0} projection and instead return {...existing, 'id': existing['_id']} (or remove the projection and let library_id = library.get('_id')). Without this, ANY user who joins an already-existing city library ends up with library_id=None.",
+    "Add data-testid='register-submit-button' and admin-submit-button if missing; add data-testid='logout-button' on Profile screen logout control.",
+    "After fix, retest: register flow → onboarding → ceremony → ambient; second user joining Tampa should increment Tampa member_count to 2."
+  ],
+  "critical_code_review_comments": [
+    "BUG: ensure_local_library strips _id then returns the existing doc, breaking library_id assignment for all repeat onboarders.",
+    "GET /api/artworks/feed?scope=global short-circuits to [] if no global libraries — correct, but consider documenting.",
+    "JWT_SECRET defaults to a hard-coded string if not in env — acceptable for dev, but flag as warning for prod.",
+    "library_id is stored as the same string id used as _id; consistent. ensure_local_library, however, accidentally hides it (see critical bug)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new pytest file with 34 tests)"
+  ],
+  "success_rate": {"backend": "100% (34/34)", "frontend": "~85% (core flows verified; register/admin submit selectors and logout testid blocked further automation)"},
+  "test_credentials": "testuser/password123 (onboarded, Tampa FL); admin/admin123 (curator). Both present in /app/memory/test_credentials.md.",
+  "seed_data_creation": "During tests I created several TEST_-prefixed artworks for testuser (now approved/rejected/pending). They are visible in the seeded testuser's Profile and the Tampa feed; non-destructive to seed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest at /app/backend/tests/backend_test.py — reusable as regression. Run with: pytest /app/backend/tests/backend_test.py -v. Use REACT_APP_BACKEND_URL env (already set in shell). Frontend Playwright sessions are not preserved across browser_automation_tool calls — login + flow must be done in a single script. The register-and-admin-login flows could not be fully exercised because submit buttons lacked the expected data-testid (or testid names differ). Critical library-id bug needs fix before retesting multi-user onboarding.",
+  "rca of the issue": "RCA — ensure_local_library bug:\n  Reproduction:\n    1. Onboard user A with city=Boston (creates library, _id=X).\n    2. Onboard user B with city=Boston.\n    3. GET /api/auth/me on B → library is null, library_id is null.\n    4. POST /api/artworks/upload as B → artwork.library_id = null, won't show in any feed.\n  Root cause: \n    `existing = await db.local_libraries.find_one({'slug': slug}, {'_id': 0})` (line 189) projects away _id. The caller computes `library_id = library.get('id') or library.get('_id')` (line 347) — both are None.\n  Fix:\n    Either remove the projection — `find_one({'slug': slug})` then return `{**existing, 'id': existing['_id']}` — or change the caller to use a known key. Recommend simplest: drop projection and let library_id = existing['_id']."
+}
