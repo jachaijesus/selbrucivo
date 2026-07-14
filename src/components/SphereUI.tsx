@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import {
   getRelationshipVisibilityMode,
   isEnvironmentPanelState,
@@ -11,6 +11,9 @@ import {
   compactTitle,
   createMaterialIdentityMetadata,
   uniqueValues,
+  type LibraryBookRelationshipType,
+  type LibraryBookShelfGroup,
+  type StudentBookRelationship,
   type SphereMaterial,
 } from '../domain/materials';
 import {
@@ -25,6 +28,37 @@ import {
 } from '../domain/pathways';
 import { createRoute, type MaterialRelationship, type RelationshipAction } from '../domain/relationships';
 import { INTERNAL_MENU_TABS, type InternalMenuTab } from '../domain/policies';
+import { searchLibraryMaterials, type MaterialSearchResult } from '../services/materialSearch';
+import { getBookAvailability } from '../services/availability/orchestrator';
+import { openAccessRoute, readAccessHandoff } from '../services/availability/handoff';
+import type { AvailabilityResult, BookAccessRoute } from '../services/availability/types';
+import { enrichAvailabilityWithAccounts } from '../services/libraryAccounts/routeEnrichment';
+import { getLibraryAccountProviders, getLibraryAccountProvider, isPrototypeLibraryProviderEnabled } from '../services/libraryAccounts/registry';
+import { removeLibraryAccount, readLibraryAccountState, upsertLibraryAccount } from '../services/libraryAccounts/storage';
+import { createPrototypeAccount } from '../services/libraryAccounts/providers/prototypeLibraryAccount';
+import {
+  describeLibraryAccountStatus,
+  formatLibraryAccountStatus,
+  getMostRelevantAccount,
+} from '../services/libraryAccounts/accountUtils';
+import type { ConnectedLibraryAccount, LibraryAccountProvider, LibraryAccountStatus } from '../services/libraryAccounts/types';
+import {
+  CONTROL_CENTER_PREFERENCES_STORAGE_KEY,
+  LANGUAGE_OPTIONS,
+  TIMEZONE_OPTIONS,
+  createDockPreferencesFromIdentity,
+  fallbackWeatherContext,
+  formatRecentMaterialLine,
+  formatStudentIdentityLine,
+  formatWeatherContext,
+  normalizeDockPreferences,
+  normalizeLocale,
+  normalizeTimezone,
+  type RecentMaterialContext,
+  type StudentDockPreferences,
+  type WeatherContext,
+} from '../domain/controlCenter';
+import type { OrientationIdentity } from '../domain/signupProtocol';
 import './SphereUI.css';
 
 type SizeKey = 'XS' | 'S' | 'M' | 'L' | 'XL';
@@ -58,6 +92,14 @@ export const SPHERE_SIZE_PRESETS: Record<SizeKey, number> = {
   XL: 680,
 };
 
+const SPHERE_RESPONSIVE_RULES: Record<SizeKey, { min: number; ratio: number; max: number }> = {
+  XS: { min: 260, ratio: 0.36, max: 360 },
+  S: { min: 340, ratio: 0.48, max: 500 },
+  M: { min: 420, ratio: 0.54, max: 600 },
+  L: { min: 520, ratio: 0.58, max: 700 },
+  XL: { min: 620, ratio: 0.62, max: 780 },
+};
+
 const DATA_LABELS = ['LAT', 'LONG', 'ALT', 'SYS', 'NODE', 'SUPPORT', 'SIGNAL'];
 const ASCII_CHARS = ['.', ':', '+', '*', '·', 'x', 'o'];
 // The visual scale is designed for future expansion; M-XL remain postponed until those states are stable.
@@ -71,6 +113,173 @@ const SCALE_NODES: Array<{ key: SizeKey; enabled: boolean }> = [
 const ACTIVE_SIZE_KEYS = SCALE_NODES.filter((node) => node.enabled).map((node) => node.key);
 const SUPPORT_MODULES = ['RX', 'NAV', 'SYS', 'MEM', 'ALT', 'LOG', 'IO', 'MAP', 'COM', 'AID', 'OBS', 'REF'];
 const NEUTRAL_ROTATION: Rotation = { x: -0.18, y: 0.36 };
+const MATERIAL_STORAGE_KEY = 'selbrucivo.library.materials.v1';
+const RELATIONSHIP_OPTIONS: Array<{ id: LibraryBookRelationshipType; label: string }> = [
+  { id: 'physical-copy', label: 'Physical Copy' },
+  { id: 'library-loan', label: 'Library Loan' },
+  { id: 'digital-purchase', label: 'Digital Purchase' },
+  { id: 'audiobook', label: 'Audiobook' },
+  { id: 'institution-access', label: 'Institution Access' },
+  { id: 'open-access', label: 'Open Access' },
+  { id: 'reference-only', label: 'Reference Only' },
+  { id: 'wishlist', label: 'Wishlist' },
+  { id: 'researching', label: 'Researching' },
+];
+const SHELF_OPTIONS: Array<{ id: LibraryBookShelfGroup; label: string }> = [
+  { id: 'currently-reading', label: 'Currently Reading' },
+  { id: 'reading-queue', label: 'Reading Queue' },
+  { id: 'recently-added', label: 'Recently Added' },
+  { id: 'completed-reading', label: 'Completed Reading' },
+  { id: 'reference-shelf', label: 'Reference Shelf' },
+  { id: 'wishlist', label: 'Wishlist' },
+];
+const createIdleAvailabilityResult = (materialId = ''): AvailabilityResult => ({
+  materialId,
+  state: 'idle',
+  routes: [],
+  providers: [],
+});
+
+function formatBookRelationship(type?: LibraryBookRelationshipType) {
+  return RELATIONSHIP_OPTIONS.find((option) => option.id === type)?.label ?? 'Researching';
+}
+
+function formatShelfGroup(group?: LibraryBookShelfGroup) {
+  return SHELF_OPTIONS.find((option) => option.id === group)?.label ?? 'Recently Added';
+}
+
+function formatRouteKind(kind: BookAccessRoute['kind']) {
+  const labels: Record<BookAccessRoute['kind'], string> = {
+    'catalog-record': 'Catalog Record',
+    'digital-borrow': 'Digital Library Access',
+    'full-view': 'Full View Available',
+    'institution-access': 'Institution Access',
+    'interlibrary-request': 'Interlibrary Request',
+    'open-access': 'Open Access',
+    'physical-holding': 'Library Holding Found',
+    preview: 'Limited Preview',
+    purchase: 'Purchase',
+  };
+
+  return labels[kind];
+}
+
+function getRouteActionLabel(kind: BookAccessRoute['kind']) {
+  const labels: Record<BookAccessRoute['kind'], string> = {
+    'catalog-record': 'VIEW PROVIDER RECORD',
+    'digital-borrow': 'CONTINUE TO PROVIDER',
+    'full-view': 'READ THROUGH PROVIDER',
+    'institution-access': 'CONTINUE TO PROVIDER',
+    'interlibrary-request': 'CONTINUE TO PROVIDER',
+    'open-access': 'OPEN SOURCE',
+    'physical-holding': 'VIEW LIBRARY RECORD',
+    preview: 'VIEW PREVIEW',
+    purchase: 'CONTINUE TO PROVIDER',
+  };
+
+  return labels[kind];
+}
+
+function formatRouteCondition(route: BookAccessRoute) {
+  if (route.requiresInstitutionLogin) {
+    return 'Authentication may be required.';
+  }
+
+  if (route.requiresLibraryCard) {
+    return 'Library card or provider account may be required.';
+  }
+
+  if (!route.eligibilityKnown) {
+    return 'Current eligibility is unknown.';
+  }
+
+  return 'No eligibility requirement reported by this provider.';
+}
+
+function formatRouteConfidence(route: BookAccessRoute) {
+  if (route.isMocked || route.confidence === 'mocked') {
+    return 'Development mock / not live provider data.';
+  }
+
+  if (route.confidence === 'catalog-only') {
+    return 'Catalog record / current availability unknown.';
+  }
+
+  if (route.confidence === 'provider-reported') {
+    return 'Provider-reported.';
+  }
+
+  if (route.confidence === 'live') {
+    return 'Checked recently.';
+  }
+
+  return 'Confidence unknown.';
+}
+
+function getRouteMeaningGroup(kind: BookAccessRoute['kind']) {
+  if (kind === 'open-access' || kind === 'full-view') {
+    return 'READ';
+  }
+
+  if (kind === 'preview') {
+    return 'PREVIEW';
+  }
+
+  if (kind === 'digital-borrow' || kind === 'physical-holding' || kind === 'institution-access' || kind === 'interlibrary-request') {
+    return 'LIBRARY ACCESS';
+  }
+
+  return 'REFERENCE';
+}
+
+function getAccountContextLine(route: BookAccessRoute) {
+  if (!route.accountContext?.isPrototype) {
+    return undefined;
+  }
+
+  if (route.accountContext.authorizationState === 'reauthentication-required') {
+    return 'Prototype membership recognized; renewed authorization is needed for account-specific context.';
+  }
+
+  if (route.accountContext.eligibility === 'possibly-eligible') {
+    return 'Prototype membership context available. Actual eligibility remains provider-controlled.';
+  }
+
+  return 'Prototype account context is present. This does not confirm access.';
+}
+
+function getProviderContextLabel(provider: LibraryAccountProvider) {
+  if (provider.kind === 'prototype') {
+    return 'PROTOTYPE CONNECTION';
+  }
+
+  if (provider.kind === 'public-source' && provider.id === 'open-library') {
+    return 'PUBLIC ACCESS SOURCE';
+  }
+
+  if (provider.kind === 'public-source') {
+    return 'PUBLIC BOOK SOURCE';
+  }
+
+  return 'CONFIGURATION REQUIRED';
+}
+
+function createDefaultStudentRelationship(accessType: LibraryBookRelationshipType, now: string): StudentBookRelationship {
+  return {
+    relationshipStatus: accessType === 'wishlist' ? 'wishlist' : accessType === 'reference-only' ? 'reference-shelf' : 'recently-added',
+    accessType,
+    currentEngagement: 'Relationship started',
+    readingNotes: [],
+    highlights: [],
+    citations: [],
+    bookmarks: [],
+    linkedEssays: [],
+    archiveReferences: [],
+    trainStationReferences: [],
+    lastOpened: now,
+    dateAdded: now,
+  };
+}
 function createSeedMaterials() {
   return PATHWAY_REGISTRY.flatMap((pathway) =>
     pathway.sections.flatMap((section, sectionIndex) =>
@@ -94,12 +303,53 @@ function isActivePathwayState(state: PathwayState) {
   return isPanelActive(state);
 }
 
+function getResponsiveSphereSize(sizeKey: SizeKey, viewport: { width: number; height: number }) {
+  const rule = SPHERE_RESPONSIVE_RULES[sizeKey];
+  const viewportMin = Math.min(viewport.width, viewport.height);
+  const viewportCeiling = viewport.width < 720 ? viewportMin * 0.68 : viewportMin * 0.62;
+  const sizeCeiling = Math.min(rule.max, viewportCeiling);
+  const idealSize = Math.max(rule.min, viewportMin * rule.ratio);
+
+  return Math.round(Math.min(sizeCeiling, idealSize));
+}
+
 function useMaterialRelationshipLayer() {
-  const [materials, setMaterials] = useState<SphereMaterial[]>(() => createSeedMaterials());
+  const [materials, setMaterials] = useState<SphereMaterial[]>(() => {
+    const seedMaterials = createSeedMaterials();
+
+    try {
+      const stored = window.localStorage.getItem(MATERIAL_STORAGE_KEY);
+      const storedMaterials = stored ? JSON.parse(stored) as SphereMaterial[] : [];
+      return storedMaterials.length > 0 ? [...storedMaterials, ...seedMaterials] : seedMaterials;
+    } catch {
+      return seedMaterials;
+    }
+  });
   const [relationships, setRelationships] = useState<MaterialRelationship[]>([]);
   const [activeMaterialId, setActiveMaterialId] = useState<string | undefined>(() => createSeedMaterials()[0]?.id);
+  const [lastActiveMaterial, setLastActiveMaterial] = useState<RecentMaterialContext | undefined>();
   const materialCounterRef = useRef(0);
   const relationshipCounterRef = useRef(0);
+
+  const recordMaterialActivation = (material: SphereMaterial, pathwayId: PathwayId) => {
+    setLastActiveMaterial({
+      materialId: material.id,
+      title: material.title,
+      pathwayId,
+      pathwayLabel: getPathwayLabel(pathwayId),
+      lastActivatedAt: new Date().toISOString(),
+    });
+  };
+
+  const activateMaterial = (material: SphereMaterial, pathwayId: PathwayId) => {
+    setActiveMaterialId(material.id);
+    recordMaterialActivation(material, pathwayId);
+  };
+
+  useEffect(() => {
+    const libraryMaterials = materials.filter((material) => material.pathwayState?.librarySection === 'active-materials/current-studies/books');
+    window.localStorage.setItem(MATERIAL_STORAGE_KEY, JSON.stringify(libraryMaterials));
+  }, [materials]);
 
   const createMaterial = (
     pathwayId: PathwayId,
@@ -124,7 +374,7 @@ function useMaterialRelationshipLayer() {
     };
 
     setMaterials((current) => [material, ...current]);
-    setActiveMaterialId(id);
+    activateMaterial(material, pathwayId);
     return material;
   };
 
@@ -132,7 +382,7 @@ function useMaterialRelationshipLayer() {
     const existing = materials.find((material) => material.title === compactTitle(title) && material.currentPathways.includes(pathwayId));
 
     if (existing) {
-      setActiveMaterialId(existing.id);
+      activateMaterial(existing, pathwayId);
       return existing;
     }
 
@@ -186,7 +436,7 @@ function useMaterialRelationshipLayer() {
 
     setMaterials((current) => current.map((material) => (material.id === source.id ? routedMaterial : material)));
     appendRelationship(action, source, routedMaterial, pathwayId, destinationPathway, `${source.title} -> ${destination}`);
-    setActiveMaterialId(source.id);
+    activateMaterial(routedMaterial, pathwayId);
     return `${action === 'preserve' ? 'Preserved' : 'Routed'}: ${source.title} -> ${destination}`;
   };
 
@@ -218,7 +468,7 @@ function useMaterialRelationshipLayer() {
       ),
     );
     appendRelationship('link', source, target, pathwayId, destinationPathway, `${source.title} linked to ${destination}`);
-    setActiveMaterialId(source.id);
+    activateMaterial(source, pathwayId);
     return `Linked: ${source.title} -> ${destination}`;
   };
 
@@ -261,7 +511,7 @@ function useMaterialRelationshipLayer() {
 
   const openMaterial = (pathwayId: PathwayId, title: string) => {
     const material = ensureMaterial(pathwayId, title);
-    setActiveMaterialId(material.id);
+    activateMaterial(material, pathwayId);
     return `Opened material: ${material.title}`;
   };
 
@@ -282,8 +532,198 @@ function useMaterialRelationshipLayer() {
     return `Removed from ${getPathwayDefinition(pathwayId)?.label}: ${material.title}`;
   };
 
+  const activateMaterialById = (pathwayId: PathwayId, materialId: string) => {
+    const material = materials.find((item) => item.id === materialId);
+
+    if (!material) {
+      return;
+    }
+
+    activateMaterial(material, pathwayId);
+  };
+
+  const saveLibraryBookMaterial = (result: MaterialSearchResult, accessType: LibraryBookRelationshipType) => {
+    const externalId = result.identifiers?.externalId ?? result.id;
+    const existing = materials.find((material) => (
+      material.currentPathways.includes('library') &&
+      material.pathwayState?.librarySection === 'active-materials/current-studies/books' &&
+      (
+        material.identifiers?.externalId === externalId ||
+        (result.identifiers?.isbn && material.identifiers?.isbn === result.identifiers.isbn) ||
+        material.title === compactTitle(result.title)
+      )
+    ));
+
+    if (existing) {
+      activateMaterial(existing, 'library');
+      const now = new Date().toISOString();
+      setMaterials((current) => current.map((material) => material.id === existing.id ? {
+        ...material,
+        studentRelationship: {
+          ...(material.studentRelationship ?? createDefaultStudentRelationship(accessType, now)),
+          accessType,
+          lastOpened: now,
+        },
+        updatedAt: now,
+      } : material));
+      return `${existing.title} relationship updated.`;
+    }
+
+    const id = `library-book-material-${materialCounterRef.current}`;
+    materialCounterRef.current += 1;
+    const now = new Date().toISOString();
+    const material: SphereMaterial = {
+      id,
+      title: compactTitle(result.title),
+      creator: result.creator,
+      kind: 'reference',
+      materialType: result.materialType,
+      lifecycleStage: 'engagement',
+      originPathway: 'library',
+      currentPathways: ['library'],
+      sourceMaterialIds: [],
+      linkedMaterialIds: [],
+      routeHistory: [createRoute('route', 'library', 'library')],
+      parentSection: 'Current Studies / Books',
+      source: result.source,
+      description: result.description,
+      thumbnail: result.thumbnail,
+      publicationYear: result.publicationYear,
+      language: result.language,
+      subjects: result.subjects,
+      editions: result.editions,
+      accessSources: result.accessSources,
+      relatedMaterialTitles: result.relatedMaterialTitles,
+      identifiers: {
+        ...result.identifiers,
+        externalId,
+      },
+      pathwayState: {
+        currentPathway: 'library',
+        librarySection: 'active-materials/current-studies/books',
+        status: 'active-study',
+      },
+      createdAt: now,
+      updatedAt: now,
+      searchIndexing: {
+        status: 'not-indexed',
+      },
+      importSource: {
+        sourceType: 'external-import',
+        externalId,
+        sourceUrl: result.providerUrl,
+      },
+      studentRelationship: createDefaultStudentRelationship(accessType, now),
+    };
+
+    setMaterials((current) => [material, ...current]);
+    activateMaterial(material, 'library');
+    return `${material.title} saved as Active Material.`;
+  };
+
+  const updateLibraryBookRelationship = (materialId: string, patch: Partial<StudentBookRelationship>) => {
+    setMaterials((current) => current.map((material) => {
+      if (material.id !== materialId) {
+        return material;
+      }
+
+      const now = new Date().toISOString();
+      const relationship = material.studentRelationship ?? createDefaultStudentRelationship('researching', now);
+
+      return {
+        ...material,
+        studentRelationship: {
+          ...relationship,
+          ...patch,
+          lastOpened: now,
+        },
+        updatedAt: now,
+      };
+    }));
+  };
+
+  const addLibraryBookNote = (materialId: string, body: string) => {
+    const trimmed = body.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    setMaterials((current) => current.map((material) => {
+      if (material.id !== materialId) {
+        return material;
+      }
+
+      const now = new Date().toISOString();
+      const relationship = material.studentRelationship ?? createDefaultStudentRelationship('researching', now);
+
+      return {
+        ...material,
+        studentRelationship: {
+          ...relationship,
+          readingNotes: [{ id: `note-${now}`, body: trimmed, createdAt: now }, ...relationship.readingNotes],
+          lastOpened: now,
+        },
+        updatedAt: now,
+      };
+    }));
+  };
+
+  const addLibraryBookHighlight = (materialId: string, text: string) => {
+    const trimmed = text.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    setMaterials((current) => current.map((material) => {
+      if (material.id !== materialId) {
+        return material;
+      }
+
+      const now = new Date().toISOString();
+      const relationship = material.studentRelationship ?? createDefaultStudentRelationship('researching', now);
+
+      return {
+        ...material,
+        studentRelationship: {
+          ...relationship,
+          highlights: [{ id: `highlight-${now}`, text: trimmed, createdAt: now }, ...relationship.highlights],
+          lastOpened: now,
+        },
+        updatedAt: now,
+      };
+    }));
+  };
+
+  const addLibraryBookCitation = (materialId: string, citation: { page?: string; chapter?: string; location?: string; studentNote?: string }) => {
+    if (!citation.page?.trim() && !citation.chapter?.trim() && !citation.location?.trim() && !citation.studentNote?.trim()) {
+      return;
+    }
+
+    setMaterials((current) => current.map((material) => {
+      if (material.id !== materialId) {
+        return material;
+      }
+
+      const now = new Date().toISOString();
+      const relationship = material.studentRelationship ?? createDefaultStudentRelationship('researching', now);
+
+      return {
+        ...material,
+        studentRelationship: {
+          ...relationship,
+          citations: [{ id: `citation-${now}`, createdAt: now, ...citation }, ...relationship.citations],
+          lastOpened: now,
+        },
+        updatedAt: now,
+      };
+    }));
+  };
+
   return {
     activeMaterialId,
+    lastActiveMaterial,
     materials,
     relationships,
     captureMaterial,
@@ -293,7 +733,12 @@ function useMaterialRelationshipLayer() {
     openMaterial,
     removeMaterial,
     routeMaterial,
-    setActiveMaterialId,
+    saveLibraryBookMaterial,
+    updateLibraryBookRelationship,
+    addLibraryBookCitation,
+    addLibraryBookHighlight,
+    addLibraryBookNote,
+    activateMaterialById,
   };
 }
 
@@ -387,6 +832,12 @@ function PathwayEntryPanel({
       <span>{pathway.label} SELECTED</span>
       <span>SPHERE ROTATION: {pathway.direction}</span>
       <span>ENVIRONMENT: PREPARING</span>
+      {pathway.id === 'library' && (
+        <div className="pathway-entry-overview-list" aria-label="Library pathway overview">
+          <span>Active Study / Current Engagement</span>
+          {pathway.overview.map((item) => <span key={item}>{item}</span>)}
+        </div>
+      )}
       <button className="pathway-action-control" type="button" onClick={onOpenPathway}>
         {pathway.entryAction}
       </button>
@@ -408,9 +859,490 @@ function formatPanelLevel(level: OrientationSnapshot<PathwayId>['returnTarget'])
     .join(' ');
 }
 
+function formatEnvironmentDateTime(now: Date, preferences: StudentDockPreferences) {
+  const locale = normalizeLocale(preferences.language);
+  const timeZone = normalizeTimezone(preferences.timezone);
+  const dateParts = new Intl.DateTimeFormat(locale, {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    timeZone,
+  }).formatToParts(now);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => dateParts.find((part) => part.type === type)?.value ?? '';
+  const time = new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: preferences.timeFormat === '12h',
+    timeZone,
+  }).format(now);
+
+  return {
+    date: [getPart('weekday'), getPart('day'), getPart('month')].filter(Boolean).join(' ').toUpperCase(),
+    time: time.toUpperCase(),
+  };
+}
+
+function ControlCenterDock({
+  preferences,
+  recentMaterial,
+  weather,
+  onOpenStudentSettings,
+}: {
+  preferences: StudentDockPreferences;
+  recentMaterial?: RecentMaterialContext;
+  weather?: WeatherContext;
+  onOpenStudentSettings: () => void;
+}) {
+  const [now, setNow] = useState(() => new Date());
+  const { date, time } = formatEnvironmentDateTime(now, preferences);
+  const identityLine = formatStudentIdentityLine(preferences);
+  const weatherLine = preferences.showWeather && weather ? formatWeatherContext(weather, preferences.temperatureUnit) : '';
+  const recentLine = preferences.showRecentMaterial ? formatRecentMaterialLine(recentMaterial) : '';
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="control-center-dock" aria-label="Control Center Dock">
+      <div className="control-center-zone control-center-zone-left">
+        <span className="dock-date">{date}</span>
+        <span>{time}</span>
+        {weatherLine && <span className="dock-weather">{weatherLine}</span>}
+      </div>
+
+      <button
+        className="control-center-identity"
+        type="button"
+        aria-label={`Open student settings for ${preferences.displayName || 'student'}`}
+        onClick={onOpenStudentSettings}
+      >
+        <span>{identityLine}</span>
+        <small aria-hidden="true">OPEN STUDENT SETTINGS</small>
+      </button>
+
+      <div className="control-center-zone control-center-zone-right">
+        {recentLine && <span>{recentLine}</span>}
+      </div>
+    </div>
+  );
+}
+
+function StudentSettingsEnvironment({
+  preferences,
+  state,
+  onOpenLibraryConnections,
+  onPreferenceChange,
+  onReturnToSphere,
+}: {
+  preferences: StudentDockPreferences;
+  state: 'student-settings' | 'returning-to-orientation';
+  onOpenLibraryConnections: () => void;
+  onPreferenceChange: (patch: Partial<StudentDockPreferences>) => void;
+  onReturnToSphere: () => void;
+}) {
+  const isReturning = state === 'returning-to-orientation';
+  const updateText = (field: keyof Pick<StudentDockPreferences, 'displayName' | 'preferredTitle' | 'schoolName' | 'programOfStudy' | 'majorOrDiscipline' | 'careerTitle'>) => (
+    event: ChangeEvent<HTMLInputElement>
+  ) => onPreferenceChange({ [field]: event.target.value });
+
+  return (
+    <section
+      className={`student-settings-environment ${isReturning ? 'is-returning' : ''}`}
+      aria-label="Student settings environment"
+      aria-busy={isReturning}
+    >
+      <div className="student-settings-return-region">
+        <button className="pathway-return-control" type="button" onClick={onReturnToSphere} disabled={isReturning}>
+          RETURN TO SPHERE
+        </button>
+      </div>
+
+      <div className="student-settings-inner">
+        <div className="student-settings-heading">
+          <span className="pathway-section-title">STUDENT SETTINGS</span>
+          <span>Environment construction remains editable.</span>
+        </div>
+
+        <div className="student-settings-grid">
+          <section className="student-settings-group" aria-label="Identity">
+            <span className="pathway-section-title">IDENTITY</span>
+            <label>
+              <span>Preferred display name</span>
+              <input value={preferences.displayName} onChange={updateText('displayName')} disabled={isReturning} />
+            </label>
+            <label>
+              <span>Preferred title</span>
+              <input value={preferences.preferredTitle} onChange={updateText('preferredTitle')} disabled={isReturning} />
+            </label>
+          </section>
+
+          <section className="student-settings-group" aria-label="Educational context">
+            <span className="pathway-section-title">EDUCATIONAL CONTEXT</span>
+            <label>
+              <span>School name</span>
+              <input value={preferences.schoolName} onChange={updateText('schoolName')} disabled={isReturning} />
+            </label>
+            <label>
+              <span>Program of study</span>
+              <input value={preferences.programOfStudy} onChange={updateText('programOfStudy')} disabled={isReturning} />
+            </label>
+            <label>
+              <span>Major or discipline</span>
+              <input value={preferences.majorOrDiscipline} onChange={updateText('majorOrDiscipline')} disabled={isReturning} />
+            </label>
+            <label>
+              <span>Career or professional title</span>
+              <input value={preferences.careerTitle} onChange={updateText('careerTitle')} disabled={isReturning} />
+            </label>
+          </section>
+
+          <section className="student-settings-group" aria-label="Environment">
+            <span className="pathway-section-title">ENVIRONMENT</span>
+            <label>
+              <span>Time zone</span>
+              <select
+                value={normalizeTimezone(preferences.timezone)}
+                onChange={(event) => onPreferenceChange({ timezone: event.target.value })}
+                disabled={isReturning}
+              >
+                {TIMEZONE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <small>Time zone keeps the Control Center aligned with your current location or practice.</small>
+            </label>
+            <label>
+              <span>Language</span>
+              <select
+                className="student-locale-select"
+                value={normalizeLocale(preferences.language)}
+                onChange={(event) => onPreferenceChange({ language: event.target.value })}
+                disabled={isReturning}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <small>Language shapes regional date and time presentation. Expanded interface translation will inherit this preference in future phases.</small>
+            </label>
+          </section>
+
+          <section className="student-settings-group" aria-label="Display preferences">
+            <span className="pathway-section-title">DISPLAY PREFERENCES</span>
+            <label>
+              <span>Time format</span>
+              <select
+                value={preferences.timeFormat}
+                onChange={(event) => onPreferenceChange({ timeFormat: event.target.value as StudentDockPreferences['timeFormat'] })}
+                disabled={isReturning}
+              >
+                <option value="24h">24-hour</option>
+                <option value="12h">12-hour</option>
+              </select>
+            </label>
+            <label>
+              <span>Temperature unit</span>
+              <select
+                value={preferences.temperatureUnit}
+                onChange={(event) => onPreferenceChange({ temperatureUnit: event.target.value as StudentDockPreferences['temperatureUnit'] })}
+                disabled={isReturning}
+              >
+                <option value="c">Celsius</option>
+                <option value="f">Fahrenheit</option>
+              </select>
+            </label>
+            <label className="student-settings-toggle">
+              <input
+                type="checkbox"
+                checked={preferences.showWeather}
+                onChange={(event) => onPreferenceChange({ showWeather: event.target.checked })}
+                disabled={isReturning}
+              />
+              <span>Weather visibility</span>
+            </label>
+            <label className="student-settings-toggle">
+              <input
+                type="checkbox"
+                checked={preferences.showContext}
+                onChange={(event) => onPreferenceChange({ showContext: event.target.checked })}
+                disabled={isReturning}
+              />
+              <span>Institution / career context visibility</span>
+            </label>
+            <label className="student-settings-toggle">
+              <input
+                type="checkbox"
+                checked={preferences.showRecentMaterial}
+                onChange={(event) => onPreferenceChange({ showRecentMaterial: event.target.checked })}
+                disabled={isReturning}
+              />
+              <span>Recent-material visibility</span>
+            </label>
+            <button className="pathway-inline-action" type="button" onClick={onOpenLibraryConnections} disabled={isReturning}>
+              LIBRARY CONNECTIONS
+            </button>
+          </section>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LibraryEnvironmentShell({
+  activeMaterial,
+  discoveryState,
+  libraryAccounts,
+  materials,
+  onBeginLibraryAccountConnection,
+  onCancelLibraryAccountConnection,
+  onDeclineLibraryAccountConnection,
+  onDisconnectLibraryAccount,
+  onAddLibraryBookCitation,
+  onAddLibraryBookHighlight,
+  onAddLibraryBookNote,
+  onEnterMaterial,
+  onEnterSection,
+  onReturnOneDepth,
+  onReturnToLibraryLanding,
+  onReturnToPathwayOverview,
+  onSaveLibraryBookMaterial,
+  onSelectMaterial,
+  onSetDiscoveryState,
+  onUpdateLibraryBookRelationship,
+  onSetPrototypeLibraryAccountStatus,
+  orientation,
+  pathway,
+}: {
+  activeMaterial?: SphereMaterial;
+  discoveryState: BookDiscoveryState;
+  libraryAccounts: ConnectedLibraryAccount[];
+  materials: SphereMaterial[];
+  onBeginLibraryAccountConnection: (providerId: string) => void;
+  onCancelLibraryAccountConnection: (providerId: string) => void;
+  onDeclineLibraryAccountConnection: (providerId: string) => void;
+  onDisconnectLibraryAccount: (providerId: string) => void;
+  onAddLibraryBookCitation: (materialId: string, citation: { page?: string; chapter?: string; location?: string; studentNote?: string }) => void;
+  onAddLibraryBookHighlight: (materialId: string, text: string) => void;
+  onAddLibraryBookNote: (materialId: string, body: string) => void;
+  onEnterMaterial: (materialId: string, sectionId?: string) => void;
+  onEnterSection: (sectionId: string) => void;
+  onReturnOneDepth: () => void;
+  onReturnToLibraryLanding: () => void;
+  onReturnToPathwayOverview: () => void;
+  onSaveLibraryBookMaterial: (result: MaterialSearchResult, accessType: LibraryBookRelationshipType) => string;
+  onSelectMaterial: (materialId: string) => void;
+  onSetDiscoveryState: Dispatch<SetStateAction<BookDiscoveryState>>;
+  onUpdateLibraryBookRelationship: (materialId: string, patch: Partial<StudentBookRelationship>) => void;
+  onSetPrototypeLibraryAccountStatus: (status: LibraryAccountStatus) => void;
+  orientation: OrientationSnapshot<PathwayId>;
+  pathway: PathwayModel;
+}) {
+  const currentStudyBooks = materials.filter((material) => (
+    material.currentPathways.includes('library') &&
+    material.pathwayState?.librarySection === 'active-materials/current-studies/books'
+  ));
+  const activeLibraryMaterial = activeMaterial?.currentPathways.includes('library') ? activeMaterial : undefined;
+  const materialTitle = activeLibraryMaterial?.title ?? orientation.activeMaterialId ?? '';
+  const isBooksWorkspace = orientation.activeLevel === 'material-view' && (
+    orientation.activeSectionId === 'Current Studies' &&
+    (materialTitle === 'Books' || !activeLibraryMaterial)
+  );
+  const isBookMaterialWorkspace = activeLibraryMaterial?.pathwayState?.librarySection === 'active-materials/current-studies/books';
+  const headerMaterial = activeLibraryMaterial?.title ?? (isBooksWorkspace ? 'BOOKS' : orientation.activeSectionId ?? 'ACTIVE SHELF');
+  const recentlyOpened = currentStudyBooks.slice(0, 3);
+  const currentlyReading = currentStudyBooks.filter((material) => material.studentRelationship?.relationshipStatus === 'currently-reading').slice(0, 3);
+  const selectedSection = pathway.sections.find((section) => section.title === orientation.activeSectionId);
+
+  const openBooksDiscovery = () => {
+    onEnterMaterial('library:Current Studies:Books', 'Current Studies');
+    onSetDiscoveryState((current) => ({
+      ...current,
+      stage: current.results.length > 0 ? current.stage : 'search',
+    }));
+  };
+
+  return (
+    <section
+      className={`library-dedicated-environment ${pathway.state === 'returning' ? 'is-returning' : ''}`}
+      aria-label="Library environment"
+    >
+      <div className="library-memory-layer" aria-hidden="true">
+        <span>LIB / 021</span>
+        <span>SHELF TRACE</span>
+        <span>REF 047</span>
+      </div>
+
+      <header className="library-environment-header" aria-label="Library environment header">
+        <button className="library-environment-title-control" type="button" onClick={onReturnToLibraryLanding}>
+          LIBRARY
+        </button>
+        <span className="library-active-material" title={headerMaterial}>{headerMaterial}</span>
+        <button className="pathway-return-control library-overview-return" type="button" onClick={onReturnToPathwayOverview}>
+          RETURN TO PATHWAY OVERVIEW
+        </button>
+      </header>
+
+      <div className="library-workspace-scroll">
+        <nav className="library-local-navigation" aria-label="Library navigation">
+          <button type="button" className="pathway-material-control" onClick={onReturnToLibraryLanding}>Continue Reading</button>
+          <button type="button" className="pathway-material-control" onClick={() => onEnterSection('Recently Opened')}>Recently Opened</button>
+          <button type="button" className="pathway-material-control" onClick={openBooksDiscovery}>Search Books</button>
+          <button type="button" className="pathway-material-control" onClick={() => onEnterSection('Reference Shelf')}>My Shelf</button>
+          <button type="button" className="pathway-material-control" onClick={() => onEnterSection('Connected Libraries')}>Connected Libraries</button>
+        </nav>
+
+        {orientation.activeLevel === 'pathway-environment' && (
+          <div className="library-landing-grid">
+            <section className="library-landing-lead">
+              <span className="pathway-section-title">ACTIVE STUDY / CURRENT ENGAGEMENT</span>
+              <span>Library gathers current materials, relationships, notes, highlights, and citations into a dedicated study environment.</span>
+            </section>
+
+            <section className="library-feature-panel">
+              <span className="pathway-section-title">CURRENTLY READING</span>
+              {currentlyReading.length > 0 ? currentlyReading.map((material) => (
+                <button
+                  key={material.id}
+                  className="saved-material-card"
+                  type="button"
+                  onClick={() => {
+                    onSelectMaterial(material.id);
+                    onSetDiscoveryState((current) => ({ ...current, selectedSavedId: material.id, stage: 'workspace' }));
+                    onEnterMaterial(material.id, 'Current Studies');
+                  }}
+                >
+                  <span className="material-card-title">{material.title}</span>
+                  {material.creator && <span>{material.creator}</span>}
+                </button>
+              )) : <span>No current reading relationship yet.</span>}
+            </section>
+
+            <section className="library-feature-panel">
+              <span className="pathway-section-title">RECENTLY OPENED</span>
+              {recentlyOpened.length > 0 ? recentlyOpened.map((material) => (
+                <button
+                  key={material.id}
+                  className="saved-material-card"
+                  type="button"
+                  onClick={() => {
+                    onSelectMaterial(material.id);
+                    onSetDiscoveryState((current) => ({ ...current, selectedSavedId: material.id, stage: 'workspace' }));
+                    onEnterMaterial(material.id, 'Current Studies');
+                  }}
+                >
+                  <span className="material-card-title">{material.title}</span>
+                  <span>{formatBookRelationship(material.studentRelationship?.accessType)}</span>
+                </button>
+              )) : <span>No books opened from discovery yet.</span>}
+            </section>
+
+            <section className="library-feature-panel library-search-invitation">
+              <span className="pathway-section-title">BOOKS DISCOVERY</span>
+              <span>Search connected book catalogs without configuring a relationship first.</span>
+              <button className="pathway-inline-action" type="button" onClick={openBooksDiscovery}>
+                SEARCH BOOKS
+              </button>
+            </section>
+          </div>
+        )}
+
+        {orientation.activeLevel === 'section-view' && orientation.activeSectionId === 'Connected Libraries' && (
+          <ConnectedLibrariesPanel
+            accounts={libraryAccounts}
+            onBeginConnection={onBeginLibraryAccountConnection}
+            onCancelConnection={onCancelLibraryAccountConnection}
+            onDeclineConnection={onDeclineLibraryAccountConnection}
+            onDisconnectAccount={onDisconnectLibraryAccount}
+            onSetPrototypeStatus={onSetPrototypeLibraryAccountStatus}
+            onReturnToLibrary={onReturnOneDepth}
+          />
+        )}
+
+        {orientation.activeLevel === 'section-view' && orientation.activeSectionId !== 'Connected Libraries' && (
+          <section className="library-section-workspace" aria-label={`${orientation.activeSectionId ?? 'Library'} section`}>
+            <div className="nested-panel-heading">
+              <span className="pathway-section-title">SECTION VIEW</span>
+              <span>{orientation.activeSectionId}</span>
+            </div>
+            <div className="pathway-material-columns">
+              {(selectedSection?.items ?? []).map((item) => (
+                <button
+                  key={item}
+                  className="pathway-material-control"
+                  type="button"
+                  onClick={() => {
+                    if (item === 'Books') {
+                      openBooksDiscovery();
+                      return;
+                    }
+
+                    onEnterMaterial(`library:${orientation.activeSectionId ?? 'section'}:${item}`, orientation.activeSectionId);
+                  }}
+                >
+                  {item}
+                </button>
+              ))}
+              {orientation.activeSectionId === 'Reference Shelf' && currentStudyBooks.map((material) => (
+                <button
+                  key={material.id}
+                  className="pathway-material-control"
+                  type="button"
+                  onClick={() => {
+                    onSelectMaterial(material.id);
+                    onSetDiscoveryState((current) => ({ ...current, selectedSavedId: material.id, stage: 'workspace' }));
+                    onEnterMaterial(material.id, 'Current Studies');
+                  }}
+                >
+                  {material.title}
+                </button>
+              ))}
+            </div>
+            <button className="pathway-return-control" type="button" onClick={onReturnOneDepth}>
+              Return to Library
+            </button>
+          </section>
+        )}
+
+        {orientation.activeLevel === 'material-view' && (isBooksWorkspace || isBookMaterialWorkspace) && (
+          <BookMaterialInput
+            savedMaterials={currentStudyBooks}
+            activeMaterial={activeLibraryMaterial}
+            discoveryState={isBookMaterialWorkspace ? { ...discoveryState, stage: discoveryState.stage === 'workspace' ? 'workspace' : discoveryState.stage } : discoveryState}
+            onAddCitation={onAddLibraryBookCitation}
+            onAddHighlight={onAddLibraryBookHighlight}
+            onAddNote={onAddLibraryBookNote}
+            libraryAccounts={libraryAccounts}
+            onSaveMaterial={onSaveLibraryBookMaterial}
+            onSelectMaterial={onSelectMaterial}
+            onSetDiscoveryState={onSetDiscoveryState}
+            onUpdateRelationship={onUpdateLibraryBookRelationship}
+          />
+        )}
+
+        {orientation.activeLevel === 'material-view' && !isBooksWorkspace && !isBookMaterialWorkspace && (
+          <section className="library-section-workspace" aria-label="Library material">
+            <div className="nested-panel-heading">
+              <span className="pathway-section-title">MATERIAL VIEW</span>
+              <span>{materialTitle || 'Selected Material'}</span>
+            </div>
+            <span>{activeLibraryMaterial?.description ?? 'Material registered in Library panel trail.'}</span>
+            <button className="pathway-return-control" type="button" onClick={onReturnOneDepth}>
+              Return to {formatPanelLevel(orientation.returnTarget)}
+            </button>
+          </section>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function PathwayEnvironment({
   pathway,
   activeMaterial,
+  discoveryState,
   materials,
   relationships,
   orientation,
@@ -424,12 +1356,19 @@ function PathwayEnvironment({
   onOpenMaterial,
   onRemoveMaterial,
   onRouteMaterial,
+  onAddLibraryBookCitation,
+  onAddLibraryBookHighlight,
+  onAddLibraryBookNote,
+  onSaveLibraryBookMaterial,
   onSelectMaterial,
+  onSetDiscoveryState,
   onSetPathwayInteractionState,
+  onUpdateLibraryBookRelationship,
   onReturnFromPathway,
 }: {
   pathway: PathwayModel;
   activeMaterial?: SphereMaterial;
+  discoveryState: BookDiscoveryState;
   materials: SphereMaterial[];
   relationships: MaterialRelationship[];
   orientation: OrientationSnapshot<PathwayId>;
@@ -443,8 +1382,14 @@ function PathwayEnvironment({
   onOpenMaterial: (pathwayId: PathwayId, title: string) => string;
   onRemoveMaterial: (pathwayId: PathwayId, title: string) => string;
   onRouteMaterial: (pathwayId: PathwayId, title: string, destination?: string) => string;
+  onAddLibraryBookCitation: (materialId: string, citation: { page?: string; chapter?: string; location?: string; studentNote?: string }) => void;
+  onAddLibraryBookHighlight: (materialId: string, text: string) => void;
+  onAddLibraryBookNote: (materialId: string, body: string) => void;
+  onSaveLibraryBookMaterial: (result: MaterialSearchResult, accessType: LibraryBookRelationshipType) => string;
   onSelectMaterial: (materialId: string) => void;
+  onSetDiscoveryState: Dispatch<SetStateAction<BookDiscoveryState>>;
   onSetPathwayInteractionState: (state: PanelInteractionState | 'expanded') => void;
+  onUpdateLibraryBookRelationship: (materialId: string, patch: Partial<StudentBookRelationship>) => void;
   onReturnFromPathway: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<InternalMenuTab>('materials');
@@ -463,6 +1408,19 @@ function PathwayEnvironment({
     actions: pathway.actions.filter((action) => getActionGroup(pathway.id, action) === groupName),
   })).filter((group) => group.actions.length > 0);
   const shouldShowRelationships = relationshipVisibilityMode !== 'hidden';
+  const currentStudyBooks = materials.filter((material) => (
+    material.currentPathways.includes('library') &&
+    material.pathwayState?.librarySection === 'active-materials/current-studies/books'
+  ));
+  const isCurrentStudiesBooksView = (
+    pathway.id === 'library' &&
+    orientation.activeLevel === 'material-view' &&
+    orientation.activeSectionId === 'Current Studies' &&
+    (activePathwayMaterial?.title ?? orientation.activeMaterialId) === 'Books'
+  );
+  const isLowerTierMaterialView = orientation.activeLevel === 'section-view' || orientation.activeLevel === 'material-view';
+  const isSectionTierView = orientation.activeLevel === 'section-view';
+  const isMaterialTierView = orientation.activeLevel === 'material-view';
   const relatedRelationships = shouldShowRelationships ? relationships.filter((relationship) =>
     relationship.fromPathway === pathway.id ||
     relationship.toPathway === pathway.id ||
@@ -568,7 +1526,15 @@ function PathwayEnvironment({
 
   return (
     <section
-      className={`pathway-environment ${pathway.id}-environment ${pathway.state === 'returning' ? 'is-returning' : ''}`}
+      className={[
+        'pathway-environment',
+        `${pathway.id}-environment`,
+        pathway.state === 'returning' ? 'is-returning' : '',
+        isLowerTierMaterialView ? 'is-lower-tier-material-view' : '',
+        isSectionTierView ? 'is-section-tier-view' : '',
+        isMaterialTierView ? 'is-material-tier-view' : '',
+        isCurrentStudiesBooksView ? 'is-books-material-view' : '',
+      ].join(' ')}
       aria-label={`${pathway.label} environment`}
     >
       <div className="pathway-environment-header">
@@ -693,12 +1659,13 @@ function PathwayEnvironment({
                 {visibleSectionTitles.map((sectionTitle, sectionIndex) => (
                   <button
                     key={sectionTitle}
-                    className={`pathway-material-control ${sectionIndex === selectedSectionIndex ? 'is-active' : ''}`}
+                    className={`pathway-material-control ${selectedSection?.title === sectionTitle ? 'is-active' : ''}`}
                     type="button"
-                    aria-pressed={sectionIndex === selectedSectionIndex}
+                    aria-pressed={selectedSection?.title === sectionTitle}
                     onClick={() => {
-                      const nextSection = pathway.sections[sectionIndex] ?? pathway.sections[0];
-                      setSelectedSectionIndex(Math.min(sectionIndex, Math.max(0, pathway.sections.length - 1)));
+                      const nextSection = pathway.sections.find((section) => section.title === sectionTitle) ?? pathway.sections[sectionIndex] ?? pathway.sections[0];
+                      const nextSectionIndex = Math.max(0, pathway.sections.findIndex((section) => section.title === nextSection?.title));
+                      setSelectedSectionIndex(nextSectionIndex);
                       setSelectedMaterial(nextSection?.items[0] ?? '');
                       onEnterSection(nextSection?.title ?? sectionTitle);
                     }}
@@ -846,11 +1813,20 @@ function PathwayEnvironment({
         <SectionViewPanel onReturnOneDepth={onReturnFromPathway} pathway={pathway} orientation={orientation} />
         <MaterialViewPanel
           activeMaterial={activePathwayMaterial}
+          currentStudyBooks={currentStudyBooks}
+          discoveryState={discoveryState}
           onReturnOneDepth={onReturnFromPathway}
           orientation={orientation}
           pathway={pathway}
           relationships={relationships}
           relationshipVisibilityMode={relationshipVisibilityMode}
+          onAddLibraryBookCitation={onAddLibraryBookCitation}
+          onAddLibraryBookHighlight={onAddLibraryBookHighlight}
+          onAddLibraryBookNote={onAddLibraryBookNote}
+          onSaveLibraryBookMaterial={onSaveLibraryBookMaterial}
+          onSelectMaterial={onSelectMaterial}
+          onSetDiscoveryState={onSetDiscoveryState}
+          onUpdateLibraryBookRelationship={onUpdateLibraryBookRelationship}
         />
       </div>
     </section>
@@ -891,7 +1867,7 @@ function SectionViewPanel({
       <div className="nested-panel-grid">
         <div className="nested-panel-group">
           <span className="pathway-section-title">Context</span>
-          <span>{pathway.label} / {sectionTitle}</span>
+          <span>{pathway.label}</span>
           <span>{section ? `${section.items.length} visible materials` : 'Section registered in panel trail'}</span>
         </div>
 
@@ -918,14 +1894,32 @@ function SectionViewPanel({
 
 function MaterialViewPanel({
   activeMaterial,
+  currentStudyBooks,
+  discoveryState,
   onReturnOneDepth,
+  onAddLibraryBookCitation,
+  onAddLibraryBookHighlight,
+  onAddLibraryBookNote,
+  onSaveLibraryBookMaterial,
+  onSelectMaterial,
+  onSetDiscoveryState,
+  onUpdateLibraryBookRelationship,
   orientation,
   pathway,
   relationships,
   relationshipVisibilityMode,
 }: {
   activeMaterial?: SphereMaterial;
+  currentStudyBooks: SphereMaterial[];
+  discoveryState: BookDiscoveryState;
   onReturnOneDepth: () => void;
+  onAddLibraryBookCitation: (materialId: string, citation: { page?: string; chapter?: string; location?: string; studentNote?: string }) => void;
+  onAddLibraryBookHighlight: (materialId: string, text: string) => void;
+  onAddLibraryBookNote: (materialId: string, body: string) => void;
+  onSaveLibraryBookMaterial: (result: MaterialSearchResult, accessType: LibraryBookRelationshipType) => string;
+  onSelectMaterial: (materialId: string) => void;
+  onSetDiscoveryState: Dispatch<SetStateAction<BookDiscoveryState>>;
+  onUpdateLibraryBookRelationship: (materialId: string, patch: Partial<StudentBookRelationship>) => void;
   orientation: OrientationSnapshot<PathwayId>;
   pathway: PathwayModel;
   relationships: MaterialRelationship[];
@@ -942,9 +1936,17 @@ function MaterialViewPanel({
     relationship.toMaterialId === activeMaterial?.id
   ));
   const materialTitle = activeMaterial?.title ?? orientation.activeMaterialId ?? 'Selected Material';
+  const isCurrentStudiesBooksView = (
+    pathway.id === 'library' &&
+    orientation.activeSectionId === 'Current Studies' &&
+    materialTitle === 'Books'
+  );
 
   return (
-    <section className="nested-panel material-view-panel" aria-label={`${pathway.label} material view`}>
+    <section
+      className={`nested-panel material-view-panel ${isCurrentStudiesBooksView ? 'books-material-view' : ''}`}
+      aria-label={`${pathway.label} material view`}
+    >
       <div className="nested-panel-heading">
         <span className="pathway-section-title">Material View</span>
         <span>{materialTitle}</span>
@@ -985,7 +1987,774 @@ function MaterialViewPanel({
           </button>
         </div>
       </div>
+
+      {isCurrentStudiesBooksView && (
+        <BookMaterialInput
+          savedMaterials={currentStudyBooks}
+          activeMaterial={activeMaterial}
+          discoveryState={discoveryState}
+          libraryAccounts={[]}
+          onAddCitation={onAddLibraryBookCitation}
+          onAddHighlight={onAddLibraryBookHighlight}
+          onAddNote={onAddLibraryBookNote}
+          onSaveMaterial={onSaveLibraryBookMaterial}
+          onSelectMaterial={onSelectMaterial}
+          onSetDiscoveryState={onSetDiscoveryState}
+          onUpdateRelationship={onUpdateLibraryBookRelationship}
+        />
+      )}
     </section>
+  );
+}
+
+function AccessRoutesPanel({
+  availability,
+  material,
+  onOpenRoute,
+  onRefresh,
+}: {
+  availability: AvailabilityResult;
+  material: SphereMaterial;
+  onOpenRoute: (route: BookAccessRoute) => void;
+  onRefresh: () => void;
+}) {
+  const failedProviders = availability.providers.filter((provider) => provider.status === 'failed');
+  const isLoading = availability.state === 'loading';
+  const isRefreshing = availability.state === 'refreshing';
+  const showRoutes = availability.routes.length > 0;
+  const routeGroups = ['READ', 'PREVIEW', 'LIBRARY ACCESS', 'REFERENCE'].map((group) => ({
+    group,
+    routes: availability.routes.filter((route) => getRouteMeaningGroup(route.kind) === group),
+  })).filter((group) => group.routes.length > 0);
+
+  return (
+    <section className="access-routes-panel" aria-label="Access routes" aria-busy={isLoading || isRefreshing}>
+      <div className="access-routes-heading">
+        <div>
+          <span className="pathway-section-title">ACCESS ROUTES</span>
+          <span>Legitimate external routes for this Book or a valid edition.</span>
+        </div>
+        <button className="pathway-inline-action" type="button" onClick={onRefresh} disabled={isLoading || isRefreshing}>
+          {isRefreshing ? 'CHECKING' : 'CHECK ACCESS AGAIN'}
+        </button>
+      </div>
+
+      {(isLoading || isRefreshing) && (
+        <div className="access-route-notice" aria-live="polite">
+          <span>{isRefreshing ? 'CHECKING ACCESS AGAIN' : 'CHECKING CONNECTED SOURCES'}</span>
+          <span>Open Library / Google Books</span>
+        </div>
+      )}
+
+      {availability.state === 'partial' && (
+        <div className="access-route-notice" aria-live="polite">
+          <span>SOME SOURCES COULD NOT BE CHECKED</span>
+          <span>Available routes are shown below.</span>
+        </div>
+      )}
+
+      {failedProviders.length > 0 && availability.state !== 'failed' && (
+        <div className="access-route-provider-status" aria-live="polite">
+          {failedProviders.slice(0, 2).map((provider) => (
+            <span key={provider.providerId}>{provider.providerName.toUpperCase()} COULD NOT BE REACHED</span>
+          ))}
+        </div>
+      )}
+
+      {availability.state === 'empty' && (
+        <div className="access-route-empty" aria-live="polite">
+          <span>NO CONNECTED ACCESS ROUTE FOUND</span>
+          <span>This Book remains available within your Library relationship.</span>
+          <span>Additional providers may be connected later.</span>
+        </div>
+      )}
+
+      {availability.state === 'failed' && (
+        <div className="access-route-empty" aria-live="polite">
+          <span>CONNECTED SOURCES COULD NOT BE CHECKED</span>
+          <span>This Book remains available within your Library relationship.</span>
+        </div>
+      )}
+
+      {showRoutes && (
+        <div className="access-route-list">
+          {routeGroups.map((group) => (
+            <section className="access-route-group" key={group.group} aria-label={`${group.group} routes`}>
+              <span className="access-route-group-title">{group.group}</span>
+              {group.routes.map((route) => {
+                const edition = material.editions?.find((item) => item.id === route.editionId);
+                const accountLine = getAccountContextLine(route);
+
+                return (
+                  <article className="access-route-card" key={route.id} aria-label={`${formatRouteKind(route.kind)} through ${route.providerName}`}>
+                    <div className="access-route-card-main">
+                      <span className="access-route-kind">{formatRouteKind(route.kind)}</span>
+                      <span>{route.availabilityMessage ?? formatRouteCondition(route)}</span>
+                      {accountLine && <span className="access-route-account-context">{accountLine}</span>}
+                      <span>{edition?.title ?? 'Material-level route'} / {route.format}</span>
+                    </div>
+                    <div className="access-route-card-meta">
+                      <span>{route.providerName}{route.libraryName ? ` / ${route.libraryName}` : ''}</span>
+                      <span>{formatRouteCondition(route)}</span>
+                      <span>{formatRouteConfidence(route)}</span>
+                      <button
+                        className="pathway-inline-action"
+                        type="button"
+                        onClick={() => onOpenRoute(route)}
+                        aria-label={`${getRouteActionLabel(route.kind)} through ${route.providerName}. Opens externally.`}
+                      >
+                        {getRouteActionLabel(route.kind)}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ConnectedLibrariesPanel({
+  accounts,
+  onBeginConnection,
+  onCancelConnection,
+  onDeclineConnection,
+  onDisconnectAccount,
+  onSetPrototypeStatus,
+  onReturnToLibrary,
+}: {
+  accounts: ConnectedLibraryAccount[];
+  onBeginConnection: (providerId: string) => void;
+  onCancelConnection: (providerId: string) => void;
+  onDeclineConnection: (providerId: string) => void;
+  onDisconnectAccount: (providerId: string) => void;
+  onSetPrototypeStatus: (status: LibraryAccountStatus) => void;
+  onReturnToLibrary: () => void;
+}) {
+  const providers = getLibraryAccountProviders();
+  const connectedAccount = getMostRelevantAccount(accounts);
+  const prototypeEnabled = isPrototypeLibraryProviderEnabled();
+
+  return (
+    <section className="connected-libraries-panel" aria-label="Connected Libraries">
+      <div className="connected-libraries-heading">
+        <span className="pathway-section-title">CONNECTED LIBRARIES</span>
+        <span>External library connections may help clarify collection context. Library remains usable without them.</span>
+        <span>Your Books, notes, highlights, citations, reading placement, and shelf remain part of Selbrucivo.</span>
+      </div>
+
+      {connectedAccount && (
+        <div className="connected-account-summary" aria-live="polite">
+          <span className="pathway-section-title">CURRENT ACCOUNT CONTEXT</span>
+          <span>{formatLibraryAccountStatus(connectedAccount.status)}</span>
+          <span>{describeLibraryAccountStatus(connectedAccount.status)}</span>
+          {connectedAccount.isMocked && <span>PROTOTYPE CONNECTION / This is not a live library account.</span>}
+          {connectedAccount.connectedAt && <span>Connected: {new Date(connectedAccount.connectedAt).toLocaleDateString()}</span>}
+          {connectedAccount.lastVerifiedAt && <span>Last checked: {new Date(connectedAccount.lastVerifiedAt).toLocaleDateString()}</span>}
+          <span>Scopes: {connectedAccount.scopes.length > 0 ? connectedAccount.scopes.join(' / ') : 'No granted scopes'}</span>
+          {(connectedAccount.status === 'connected' || connectedAccount.status === 'reauthentication-required') && (
+            <button className="pathway-inline-action" type="button" onClick={() => onBeginConnection(connectedAccount.providerId)}>
+              CONTINUE TO PROTOTYPE
+            </button>
+          )}
+          <button className="pathway-return-control" type="button" onClick={() => onDisconnectAccount(connectedAccount.providerId)}>
+            DISCONNECT
+          </button>
+        </div>
+      )}
+
+      <div className="connected-provider-list" role="list" aria-label="Library account providers">
+        {providers.map((provider) => {
+          const account = accounts.find((item) => item.providerId === provider.id);
+          const capabilities = provider.getConnectionCapabilities();
+
+          return (
+            <article className="connected-provider-card" role="listitem" key={provider.id}>
+              <div className="connected-provider-main">
+                <span className="connected-provider-kind">{getProviderContextLabel(provider)}</span>
+                <span className="material-card-title">{provider.label}</span>
+                {provider.kind === 'prototype' && (
+                  <>
+                    <span>This is not a live library account.</span>
+                    <span>No real credentials are collected.</span>
+                  </>
+                )}
+                {provider.id === 'open-library' && <span>Account connection is not required for current routes.</span>}
+                {provider.id === 'google-books' && <span>A Google account is not treated as a library membership.</span>}
+                {provider.kind === 'disabled' && <span>Live connection is not available in this prototype.</span>}
+              </div>
+
+              <div className="connected-provider-meta">
+                <span>Status: {formatLibraryAccountStatus(account?.status ?? (provider.kind === 'disabled' ? 'configuration-required' : 'disconnected'))}</span>
+                <span>Membership status: {capabilities.supportsMembershipStatus ? 'Prototype-supported' : 'Not supported here'}</span>
+                <span>Collection eligibility: {capabilities.supportsCollectionEligibility ? 'Prototype-supported' : 'Not supported here'}</span>
+                <span>Loans / Holds: {capabilities.supportsLoans || capabilities.supportsHolds ? 'Supported' : 'Not supported'}</span>
+                {capabilities.requiresServerBoundary && <span>Requires approved server boundary.</span>}
+                {provider.kind === 'prototype' && prototypeEnabled && (
+                  <>
+                    <button
+                      className="pathway-inline-action"
+                      type="button"
+                      onClick={() => onBeginConnection(provider.id)}
+                    >
+                      {account?.status === 'reauthentication-required' ? 'REAUTHENTICATE' : 'REVIEW CONNECTION'}
+                    </button>
+                    <button className="pathway-return-control" type="button" onClick={() => onDeclineConnection(provider.id)}>
+                      DECLINE
+                    </button>
+                    <button className="pathway-return-control" type="button" onClick={() => onCancelConnection(provider.id)}>
+                      CANCEL
+                    </button>
+                  </>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {prototypeEnabled && (
+        <section className="prototype-review-controls" aria-label="Prototype review controls">
+          <span className="pathway-section-title">PROTOTYPE REVIEW CONTROLS</span>
+          <span>Not part of a live provider experience.</span>
+          <div className="prototype-status-grid">
+            {([
+              'connected',
+              'reauthentication-required',
+              'authorization-declined',
+              'connection-revoked',
+              'card-expired',
+              'access-limited',
+              'provider-unavailable',
+              'configuration-required',
+            ] as LibraryAccountStatus[]).map((status) => (
+              <button className="relationship-chip" type="button" key={status} onClick={() => onSetPrototypeStatus(status)}>
+                {formatLibraryAccountStatus(status)}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="connected-libraries-consent" aria-label="Prototype connection explanation">
+        <span className="pathway-section-title">CONNECT LIBRARY ACCOUNT</span>
+        <span>This prototype does not connect to a live library.</span>
+        <span>Do not enter a real library-card number or password.</span>
+        <span>The connection demonstrates how a future approved provider may clarify membership and collection eligibility.</span>
+        <span>Selbrucivo stores only the normalized prototype account status.</span>
+        <span>Your Books, notes, highlights, citations, reading placement, and shelf remain part of your Selbrucivo environment.</span>
+      </section>
+
+      <button className="pathway-return-control" type="button" onClick={onReturnToLibrary}>
+        RETURN TO LIBRARY
+      </button>
+    </section>
+  );
+}
+
+function BookMaterialInput({
+  activeMaterial,
+  discoveryState,
+  libraryAccounts,
+  onAddCitation,
+  onAddHighlight,
+  onAddNote,
+  onSaveMaterial,
+  onSelectMaterial,
+  onSetDiscoveryState,
+  onUpdateRelationship,
+  savedMaterials,
+}: {
+  activeMaterial?: SphereMaterial;
+  discoveryState: BookDiscoveryState;
+  libraryAccounts: ConnectedLibraryAccount[];
+  onAddCitation: (materialId: string, citation: { page?: string; chapter?: string; location?: string; studentNote?: string }) => void;
+  onAddHighlight: (materialId: string, text: string) => void;
+  onAddNote: (materialId: string, body: string) => void;
+  onSaveMaterial: (result: MaterialSearchResult, accessType: LibraryBookRelationshipType) => string;
+  onSelectMaterial: (materialId: string) => void;
+  onSetDiscoveryState: Dispatch<SetStateAction<BookDiscoveryState>>;
+  onUpdateRelationship: (materialId: string, patch: Partial<StudentBookRelationship>) => void;
+  savedMaterials: SphereMaterial[];
+}) {
+  const {
+    citationDraft,
+    highlightDraft,
+    noteDraft,
+    query,
+    results,
+    selectedRelationship,
+    selectedResult,
+    selectedSavedId,
+    stage,
+    status,
+  } = discoveryState;
+  const savedExternalIds = useMemo(() => new Set(savedMaterials.map((material) => material.identifiers?.externalId).filter(Boolean)), [savedMaterials]);
+  const selectedSavedMaterial = savedMaterials.find((material) => material.id === selectedSavedId) ??
+    (activeMaterial?.pathwayState?.librarySection === 'active-materials/current-studies/books' ? activeMaterial : undefined) ??
+    savedMaterials[0];
+  const shelfGroups = SHELF_OPTIONS.map((option) => ({
+    ...option,
+    materials: savedMaterials.filter((material) => (material.studentRelationship?.relationshipStatus ?? 'recently-added') === option.id),
+  }));
+  const [availability, setAvailability] = useState<AvailabilityResult>(() => createIdleAvailabilityResult());
+  const selectedSavedMaterialId = selectedSavedMaterial?.id;
+  const libraryAccountSignature = libraryAccounts.map((account) => `${account.id}:${account.status}`).join('|');
+
+  useEffect(() => {
+    if (stage !== 'workspace' || !selectedSavedMaterial) {
+      setAvailability(createIdleAvailabilityResult());
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    setAvailability((current) => (
+      current.materialId === selectedSavedMaterial.id && current.routes.length > 0
+        ? { ...current, state: 'refreshing' }
+        : {
+            ...createIdleAvailabilityResult(selectedSavedMaterial.id),
+            state: 'loading',
+          }
+    ));
+
+    getBookAvailability({ material: selectedSavedMaterial }, { signal: controller.signal })
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setAvailability(enrichAvailabilityWithAccounts(result, libraryAccounts));
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setAvailability({
+            ...createIdleAvailabilityResult(selectedSavedMaterial.id),
+            state: 'failed',
+          });
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedSavedMaterialId, stage, libraryAccountSignature]);
+
+  useEffect(() => {
+    if (!selectedSavedMaterial) {
+      return;
+    }
+
+    const handoff = readAccessHandoff();
+
+    if (handoff?.materialId !== selectedSavedMaterial.id || handoff.returnContext.scrollPosition === undefined) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const scrollRegion = document.querySelector<HTMLElement>('.library-workspace-scroll');
+      scrollRegion?.scrollTo({ top: handoff.returnContext.scrollPosition });
+    });
+  }, [selectedSavedMaterialId]);
+
+  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      onSetDiscoveryState((current) => ({
+        ...current,
+        status: 'Enter a title, author, ISBN, subject, or keyword before searching.',
+      }));
+      return;
+    }
+
+    onSetDiscoveryState((current) => ({
+      ...current,
+      selectedResult: undefined,
+      stage: 'search',
+      status: 'Searching Open Library...',
+    }));
+
+    try {
+      const nextResults = await searchLibraryMaterials(trimmedQuery);
+      onSetDiscoveryState((current) => ({
+        ...current,
+        results: nextResults,
+        selectedResult: undefined,
+        stage: nextResults.length > 0 ? 'results' : 'search',
+        status: nextResults.length > 0 ? `${nextResults.length} results returned from connected book catalogs.` : 'No matching book materials found.',
+      }));
+    } catch {
+      onSetDiscoveryState((current) => ({
+        ...current,
+        stage: 'search',
+        status: 'Search provider is unavailable. Try again when the network connection returns.',
+      }));
+    }
+  };
+
+  const handleSave = (result: MaterialSearchResult) => {
+    const event = onSaveMaterial(result, selectedRelationship);
+    onSetDiscoveryState((current) => ({
+      ...current,
+      selectedSavedId: undefined,
+      stage: 'workspace',
+      status: `${event} Material identity remains continuous across access changes.`,
+    }));
+  };
+
+  const handleAddNote = () => {
+    if (!selectedSavedMaterial) {
+      return;
+    }
+
+    onAddNote(selectedSavedMaterial.id, noteDraft);
+    onSetDiscoveryState((current) => ({ ...current, noteDraft: '' }));
+  };
+
+  const handleAddHighlight = () => {
+    if (!selectedSavedMaterial) {
+      return;
+    }
+
+    onAddHighlight(selectedSavedMaterial.id, highlightDraft);
+    onSetDiscoveryState((current) => ({ ...current, highlightDraft: '' }));
+  };
+
+  const handleAddCitation = () => {
+    if (!selectedSavedMaterial) {
+      return;
+    }
+
+    onAddCitation(selectedSavedMaterial.id, citationDraft);
+    onSetDiscoveryState((current) => ({ ...current, citationDraft: { page: '', chapter: '', location: '', studentNote: '' } }));
+  };
+
+  const refreshAvailability = () => {
+    if (!selectedSavedMaterial) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    setAvailability((current) => ({
+      ...current,
+      materialId: selectedSavedMaterial.id,
+      state: current.routes.length > 0 ? 'refreshing' : 'loading',
+    }));
+
+    getBookAvailability({ material: selectedSavedMaterial }, { refresh: true, signal: controller.signal })
+      .then((result) => setAvailability(enrichAvailabilityWithAccounts(result, libraryAccounts)))
+      .catch(() => setAvailability({
+        ...createIdleAvailabilityResult(selectedSavedMaterial.id),
+        state: 'failed',
+      }));
+  };
+
+  const handleOpenRoute = (route: BookAccessRoute) => {
+    const scrollRegion = document.querySelector<HTMLElement>('.library-workspace-scroll');
+    const opened = openAccessRoute(route, scrollRegion?.scrollTop);
+
+    onSetDiscoveryState((current) => ({
+      ...current,
+      status: opened
+        ? 'External provider opened. Access remains managed by the connected source.'
+        : 'This provider link could not be opened safely.',
+    }));
+  };
+
+  return (
+    <div className="book-material-input" data-book-stage={stage} aria-label="Current Studies Books input">
+      <div className="book-material-intro">
+        <span className="pathway-section-title">BOOKS DISCOVERY</span>
+        <span>Search connected book catalogs.</span>
+      </div>
+
+      <form className="book-material-search" onSubmit={handleSearch}>
+        <label className="book-material-search-label" htmlFor="library-book-material-search">
+          Title, author, ISBN, subject, or keyword
+        </label>
+        <input
+          id="library-book-material-search"
+          className="book-material-search-input"
+          type="search"
+          value={query}
+          placeholder="Title, author, ISBN, subject, keyword"
+          onChange={(event) => onSetDiscoveryState((current) => ({ ...current, query: event.target.value }))}
+        />
+        <button className="pathway-inline-action" type="submit">
+          SEARCH
+        </button>
+      </form>
+
+      <span className="book-material-status" aria-live="polite">{status}</span>
+
+      <div className="book-material-stage-region">
+        {results.length > 0 && (stage === 'results' || stage === 'material' || stage === 'relationship') && (
+          <div className="material-search-results" aria-label="Search results">
+            <div className="book-stage-heading">
+              <span className="pathway-section-title">RESULTS</span>
+              <span>{results.length} results / Open Library source</span>
+            </div>
+            {results.map((result) => {
+              const isSaved = savedExternalIds.has(result.identifiers?.externalId ?? result.id);
+
+              return (
+                <article className={`material-search-result-card ${selectedResult?.id === result.id ? 'is-active' : ''}`} key={result.id}>
+                  {result.thumbnail ? (
+                    <img className="book-cover" src={result.thumbnail} alt="" />
+                  ) : (
+                    <div className="book-cover book-cover-placeholder" aria-hidden="true">BOOK</div>
+                  )}
+                  <button
+                    className="material-search-result-main"
+                    type="button"
+                    onClick={() => onSetDiscoveryState((current) => ({
+                      ...current,
+                      selectedResult: result,
+                      stage: 'material',
+                      status: `${result.title} opened as a Book Material.`,
+                    }))}
+                  >
+                    <span className="material-card-title">{result.title}</span>
+                    {result.creator && <span>{result.creator}</span>}
+                    <span>{result.publicationYear ?? 'Unknown year'} / {result.language ?? 'Language unknown'}</span>
+                    {result.description && <span>{result.description}</span>}
+                    <span>{result.subjects.slice(0, 4).join(' / ') || 'No subjects listed'}</span>
+                    <span>{result.editions.length} editions / availability checked after saving</span>
+                  </button>
+                  <button
+                    className="pathway-inline-action"
+                    type="button"
+                    disabled={isSaved}
+                    onClick={() => onSetDiscoveryState((current) => ({
+                      ...current,
+                      selectedResult: result,
+                      stage: 'material',
+                      status: isSaved ? 'This Material is already in Library.' : `${result.title} opened as a Book Material.`,
+                    }))}
+                  >
+                    {isSaved ? 'SAVED' : 'VIEW MATERIAL'}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        {selectedResult && (stage === 'material' || stage === 'relationship') && (
+          <article className="book-material-detail" aria-label="Discovered book material">
+            {selectedResult.thumbnail ? (
+              <img className="book-cover is-large" src={selectedResult.thumbnail} alt="" />
+            ) : (
+              <div className="book-cover book-cover-placeholder is-large" aria-hidden="true">BOOK</div>
+            )}
+            <div className="book-material-detail-body">
+              <span className="pathway-section-title">MATERIAL VIEW</span>
+              <span className="material-card-title">{selectedResult.title}</span>
+              <span>{selectedResult.creator ?? 'Author unknown'} / {selectedResult.publicationYear ?? 'Year unknown'} / {selectedResult.language ?? 'Language unknown'}</span>
+              <span>{selectedResult.description}</span>
+              <div className="book-chip-row">
+                {selectedResult.subjects.slice(0, 6).map((subject) => <span key={subject}>{subject}</span>)}
+              </div>
+              <div className="book-material-columns">
+                <div>
+                  <span className="pathway-section-title">Editions</span>
+                  {selectedResult.editions.slice(0, 4).map((edition) => (
+                    <span key={edition.id}>{edition.title} {edition.publicationYear ? `/ ${edition.publicationYear}` : ''}</span>
+                  ))}
+                </div>
+                <div>
+                  <span className="pathway-section-title">Bibliographic Source</span>
+                  {selectedResult.providerUrl ? (
+                    <a href={selectedResult.providerUrl} target="_blank" rel="noreferrer">Open Library record</a>
+                  ) : (
+                    <span>Provider record unavailable</span>
+                  )}
+                  <span>Access routes are checked after the Book is saved to Library.</span>
+                </div>
+              </div>
+              {stage === 'material' && (
+                <div className="book-material-actions">
+                  <button
+                    className="pathway-inline-action"
+                    type="button"
+                    onClick={() => onSetDiscoveryState((current) => ({
+                      ...current,
+                      stage: 'relationship',
+                      status: 'Choose how you are engaging with this Book Material.',
+                    }))}
+                  >
+                    ADD TO LIBRARY
+                  </button>
+                  <button className="pathway-return-control" type="button" onClick={() => onSetDiscoveryState((current) => ({ ...current, stage: 'results' }))}>
+                    RETURN TO RESULTS
+                  </button>
+                </div>
+              )}
+              {stage === 'relationship' && (
+                <>
+                  <div className="relationship-selector" aria-label="Relationship type">
+                    <span className="pathway-section-title">HOW ARE YOU ENGAGING WITH THIS BOOK?</span>
+                    {RELATIONSHIP_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        className={`relationship-chip ${selectedRelationship === option.id ? 'is-active' : ''}`}
+                        type="button"
+                        aria-pressed={selectedRelationship === option.id}
+                        onClick={() => onSetDiscoveryState((current) => ({ ...current, selectedRelationship: option.id }))}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="pathway-inline-action" type="button" onClick={() => handleSave(selectedResult)}>
+                    BEGIN RELATIONSHIP
+                  </button>
+                </>
+              )}
+            </div>
+          </article>
+        )}
+
+        {(stage === 'workspace' || (stage === 'search' && savedMaterials.length > 0)) && (
+        <div className="saved-materials-list library-shelf" aria-label="My Shelf">
+          <span className="pathway-section-title">MY SHELF</span>
+          {savedMaterials.length > 0 ? (
+            shelfGroups.map((group) => (
+              <section className="shelf-group" key={group.id}>
+                <span>{group.label}</span>
+                {group.materials.length > 0 ? group.materials.map((material) => (
+                  <button
+                    className={`saved-material-card ${selectedSavedMaterial?.id === material.id ? 'is-active' : ''}`}
+                    key={material.id}
+                    type="button"
+                    onClick={() => {
+                      onSetDiscoveryState((current) => ({
+                        ...current,
+                        selectedSavedId: material.id,
+                        stage: 'workspace',
+                        status: `${material.title} opened in Reading Workspace.`,
+                      }));
+                      onSelectMaterial(material.id);
+                    }}
+                  >
+                    <span className="material-card-title">{material.title}</span>
+                    {material.creator && <span>{material.creator}</span>}
+                    <span>{formatBookRelationship(material.studentRelationship?.accessType)} / {material.publicationYear ?? 'Year unknown'}</span>
+                  </button>
+                )) : <span>No materials</span>}
+              </section>
+            ))
+          ) : (
+            <span>No books saved for active study yet.</span>
+          )}
+        </div>
+        )}
+
+        {selectedSavedMaterial && stage === 'workspace' && (
+          <article className="student-relationship-panel" aria-label="Student relationship">
+            <span className="pathway-section-title">READING WORKSPACE</span>
+            <span className="material-card-title">{selectedSavedMaterial.title}</span>
+            <div className="book-material-columns">
+              <label>
+                Access Type
+                <select
+                  value={selectedSavedMaterial.studentRelationship?.accessType ?? 'researching'}
+                  onChange={(event) => onUpdateRelationship(selectedSavedMaterial.id, { accessType: event.target.value as LibraryBookRelationshipType })}
+                >
+                  {RELATIONSHIP_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                </select>
+              </label>
+              <label>
+                Shelf
+                <select
+                  value={selectedSavedMaterial.studentRelationship?.relationshipStatus ?? 'recently-added'}
+                  onChange={(event) => onUpdateRelationship(selectedSavedMaterial.id, { relationshipStatus: event.target.value as LibraryBookShelfGroup })}
+                >
+                  {SHELF_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                </select>
+              </label>
+              <label>
+                Current Page
+                <input
+                  disabled={(selectedSavedMaterial.studentRelationship?.accessType ?? 'researching') === 'researching'}
+                  value={selectedSavedMaterial.studentRelationship?.currentPage ?? ''}
+                  onChange={(event) => onUpdateRelationship(selectedSavedMaterial.id, { currentPage: event.target.value })}
+                />
+              </label>
+              <label>
+                Current Chapter
+                <input
+                  disabled={(selectedSavedMaterial.studentRelationship?.accessType ?? 'researching') === 'researching'}
+                  value={selectedSavedMaterial.studentRelationship?.currentChapter ?? ''}
+                  onChange={(event) => onUpdateRelationship(selectedSavedMaterial.id, { currentChapter: event.target.value })}
+                />
+              </label>
+            </div>
+            <label>
+              Current Engagement
+              <textarea
+                value={selectedSavedMaterial.studentRelationship?.currentEngagement ?? ''}
+                onChange={(event) => onUpdateRelationship(selectedSavedMaterial.id, { currentEngagement: event.target.value })}
+              />
+            </label>
+            <AccessRoutesPanel
+              availability={availability.materialId === selectedSavedMaterial.id ? availability : createIdleAvailabilityResult(selectedSavedMaterial.id)}
+              material={selectedSavedMaterial}
+              onOpenRoute={handleOpenRoute}
+              onRefresh={refreshAvailability}
+            />
+            <section className="edition-information-panel" aria-label="Edition information">
+              <span className="pathway-section-title">EDITION INFORMATION</span>
+              {(selectedSavedMaterial.editions ?? []).length > 0 ? (
+                (selectedSavedMaterial.editions ?? []).slice(0, 4).map((edition) => (
+                  <span key={edition.id}>
+                    {edition.title}
+                    {edition.publicationYear ? ` / ${edition.publicationYear}` : ''}
+                    {edition.language ? ` / ${edition.language}` : ''}
+                    {edition.isbn ? ` / ISBN ${edition.isbn}` : ''}
+                  </span>
+                ))
+              ) : (
+                <span>No edition records attached yet.</span>
+              )}
+            </section>
+            <div className="student-entry-grid">
+              <label>
+                Reading Note
+                <textarea value={noteDraft} onChange={(event) => onSetDiscoveryState((current) => ({ ...current, noteDraft: event.target.value }))} />
+                <button className="pathway-inline-action" type="button" onClick={handleAddNote}>Add Note</button>
+              </label>
+              <label>
+                Highlight
+                <textarea value={highlightDraft} onChange={(event) => onSetDiscoveryState((current) => ({ ...current, highlightDraft: event.target.value }))} />
+                <button className="pathway-inline-action" type="button" onClick={handleAddHighlight}>Add Highlight</button>
+              </label>
+              <div className="citation-form">
+                <span>Citation</span>
+                <input placeholder="Page" value={citationDraft.page} onChange={(event) => onSetDiscoveryState((current) => ({ ...current, citationDraft: { ...current.citationDraft, page: event.target.value } }))} />
+                <input placeholder="Chapter" value={citationDraft.chapter} onChange={(event) => onSetDiscoveryState((current) => ({ ...current, citationDraft: { ...current.citationDraft, chapter: event.target.value } }))} />
+                <input placeholder="Location" value={citationDraft.location} onChange={(event) => onSetDiscoveryState((current) => ({ ...current, citationDraft: { ...current.citationDraft, location: event.target.value } }))} />
+                <textarea placeholder="Student note" value={citationDraft.studentNote} onChange={(event) => onSetDiscoveryState((current) => ({ ...current, citationDraft: { ...current.citationDraft, studentNote: event.target.value } }))} />
+                <button className="pathway-inline-action" type="button" onClick={handleAddCitation}>Add Citation</button>
+              </div>
+            </div>
+            <div className="relationship-object-list">
+              <span>Notes: {selectedSavedMaterial.studentRelationship?.readingNotes.length ?? 0}</span>
+              <span>Highlights: {selectedSavedMaterial.studentRelationship?.highlights.length ?? 0}</span>
+              <span>Citations: {selectedSavedMaterial.studentRelationship?.citations.length ?? 0}</span>
+              <span>Last Opened: {selectedSavedMaterial.studentRelationship?.lastOpened ? new Date(selectedSavedMaterial.studentRelationship.lastOpened).toLocaleDateString() : 'Not opened'}</span>
+            </div>
+            <div className="relationship-object-list">
+              {(selectedSavedMaterial.studentRelationship?.readingNotes ?? []).slice(0, 3).map((note) => <span key={note.id}>Note: {note.body}</span>)}
+              {(selectedSavedMaterial.studentRelationship?.highlights ?? []).slice(0, 3).map((highlight) => <span key={highlight.id}>Highlight: {highlight.text}</span>)}
+              {(selectedSavedMaterial.studentRelationship?.citations ?? []).slice(0, 3).map((citation) => <span key={citation.id}>Citation: {citation.page || citation.chapter || citation.location} {citation.studentNote}</span>)}
+            </div>
+          </article>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1097,10 +2866,38 @@ function drawProjectedPath(
 
 type SphereUIProps = {
   isInteractionDisabled?: boolean;
+  orientationIdentity?: OrientationIdentity;
   onReturnToThreshold?: () => void;
 };
 
-export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }: SphereUIProps) {
+type SphereEnvironmentState = 'orientation' | 'student-settings' | 'returning-to-orientation';
+type BookDiscoveryStage = 'search' | 'results' | 'material' | 'relationship' | 'workspace';
+
+type BookDiscoveryState = {
+  citationDraft: { page: string; chapter: string; location: string; studentNote: string };
+  highlightDraft: string;
+  noteDraft: string;
+  query: string;
+  results: MaterialSearchResult[];
+  selectedRelationship: LibraryBookRelationshipType;
+  selectedResult?: MaterialSearchResult;
+  selectedSavedId?: string;
+  stage: BookDiscoveryStage;
+  status: string;
+};
+
+const createInitialBookDiscoveryState = (): BookDiscoveryState => ({
+  citationDraft: { page: '', chapter: '', location: '', studentNote: '' },
+  highlightDraft: '',
+  noteDraft: '',
+  query: '',
+  results: [],
+  selectedRelationship: 'researching',
+  stage: 'search',
+  status: 'Search by title, author, ISBN, subject, or keyword.',
+});
+
+export function SphereUI({ isInteractionDisabled = false, orientationIdentity, onReturnToThreshold }: SphereUIProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
   const rotationRef = useRef<Rotation>({ ...NEUTRAL_ROTATION });
@@ -1120,10 +2917,15 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
     enterMaterial,
     enterSection,
     returnOneDepth,
+    returnToPathwayOverview,
     setPathwayInteractionState,
     returnFromPathway,
   } = usePanelArchitecture<PathwayId>(PATHWAY_REGISTRY);
   const materialLayer = useMaterialRelationshipLayer();
+  const [bookDiscoveryState, setBookDiscoveryState] = useState<BookDiscoveryState>(() => createInitialBookDiscoveryState());
+  const [libraryAccounts, setLibraryAccounts] = useState<ConnectedLibraryAccount[]>(() => (
+    readLibraryAccountState(isPrototypeLibraryProviderEnabled()).accounts
+  ));
   const pathwayModels = useMemo(
     () =>
       PATHWAY_REGISTRY.map((pathway) => ({
@@ -1135,14 +2937,167 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
   const activePathway = pathwayModels.find((pathway) => isActivePathwayState(pathway.state));
   const visiblePathway = pathwayModels.find((pathway) => pathway.state !== 'inactive');
   const [sizeKey, setSizeKey] = useState<SizeKey>('S');
+  const [sphereEnvironmentState, setSphereEnvironmentState] = useState<SphereEnvironmentState>('orientation');
+  const [dockPreferences, setDockPreferences] = useState<StudentDockPreferences>(() => {
+    const basePreferences = createDockPreferencesFromIdentity(orientationIdentity);
+
+    try {
+      const stored = window.localStorage.getItem(CONTROL_CENTER_PREFERENCES_STORAGE_KEY);
+      const storedPreferences = stored ? JSON.parse(stored) as Partial<StudentDockPreferences> : {};
+
+      return normalizeDockPreferences({
+        ...basePreferences,
+        ...storedPreferences,
+      });
+    } catch {
+      return basePreferences;
+    }
+  });
+  const [weatherContext] = useState<WeatherContext | undefined>(fallbackWeatherContext);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    height: window.innerHeight,
+    width: window.innerWidth,
+  }));
+  const isStudentSettingsOpen = sphereEnvironmentState !== 'orientation';
+  const isSphereInputDisabled = isInteractionDisabled || isStudentSettingsOpen;
   const isPathwayControllingSphere = activePathway !== undefined;
   const visiblePathwayState = visiblePathway?.state ?? 'inactive';
   const visiblePathwayClass = visiblePathway ? `${visiblePathway.id}-state-${visiblePathway.state}` : '';
+  const isDedicatedLibraryEnvironment = (
+    visiblePathway?.id === 'library' &&
+    orientation.activePathwayId === 'library' &&
+    orientation.activeLevel !== 'pathway-overview'
+  );
   const activeMaterial = materialLayer.materials.find((material) => material.id === materialLayer.activeMaterialId);
   const relationshipVisibilityMode = getRelationshipVisibilityMode(
     visiblePathwayState,
     panelTrail.some((panel) => panel.level === 'material-view' || panel.level === 'section-view'),
   );
+
+  const persistLibraryAccount = (account: ConnectedLibraryAccount) => {
+    upsertLibraryAccount(account, isPrototypeLibraryProviderEnabled());
+    setLibraryAccounts(readLibraryAccountState(isPrototypeLibraryProviderEnabled()).accounts);
+  };
+
+  const beginLibraryAccountConnection = (providerId: string) => {
+    const provider = getLibraryAccountProvider(providerId);
+
+    if (!provider || !provider.getConnectionCapabilities().supportsConnection) {
+      return;
+    }
+
+    provider.beginConnection({
+      providerId,
+      returnContext: {
+        pathway: 'library',
+        view: 'connected-libraries',
+        scrollPosition: document.querySelector<HTMLElement>('.library-workspace-scroll')?.scrollTop,
+      },
+    }).then((result) => {
+      if (result.account) {
+        persistLibraryAccount(result.account);
+      }
+    });
+  };
+
+  const declineLibraryAccountConnection = (providerId: string) => {
+    if (providerId !== 'selbrucivo-library-prototype' || !isPrototypeLibraryProviderEnabled()) {
+      return;
+    }
+
+    persistLibraryAccount(createPrototypeAccount('authorization-declined'));
+  };
+
+  const cancelLibraryAccountConnection = (providerId: string) => {
+    if (providerId !== 'selbrucivo-library-prototype' || !isPrototypeLibraryProviderEnabled()) {
+      return;
+    }
+
+    persistLibraryAccount(createPrototypeAccount('disconnected'));
+  };
+
+  const setPrototypeLibraryAccountStatus = (status: LibraryAccountStatus) => {
+    if (!isPrototypeLibraryProviderEnabled()) {
+      return;
+    }
+
+    persistLibraryAccount(createPrototypeAccount(status));
+  };
+
+  const disconnectLibraryAccount = (providerId: string) => {
+    const confirmed = window.confirm(
+      [
+        'DISCONNECT LIBRARY ACCOUNT',
+        '',
+        'Disconnecting removes this prototype provider relationship from Selbrucivo.',
+        '',
+        'Your Books, notes, highlights, citations, reading placement, shelf relationships, and public access routes will remain.',
+      ].join('\n'),
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    removeLibraryAccount(providerId, isPrototypeLibraryProviderEnabled());
+    setLibraryAccounts(readLibraryAccountState(isPrototypeLibraryProviderEnabled()).accounts);
+  };
+
+  const openStudentSettings = () => {
+    if (isInteractionDisabled || (activePathway && !isDedicatedLibraryEnvironment)) {
+      return;
+    }
+
+    setSphereEnvironmentState('student-settings');
+  };
+
+  const returnToSphereOrientation = () => {
+    if (sphereEnvironmentState === 'returning-to-orientation') {
+      return;
+    }
+
+    setSphereEnvironmentState('returning-to-orientation');
+    window.setTimeout(() => setSphereEnvironmentState('orientation'), 620);
+  };
+
+  const openLibraryConnectionsFromSettings = () => {
+    setSphereEnvironmentState('orientation');
+    expandPathway('library');
+    window.setTimeout(() => enterSection('library', 'Connected Libraries'), 0);
+  };
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      CONTROL_CENTER_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(normalizeDockPreferences(dockPreferences)),
+    );
+  }, [dockPreferences]);
+
+  useEffect(() => {
+    let resizeFrame: number | null = null;
+
+    const updateViewportSize = () => {
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+
+      resizeFrame = window.requestAnimationFrame(() => {
+        setViewportSize({
+          height: window.innerHeight,
+          width: window.innerWidth,
+        });
+      });
+    };
+
+    window.addEventListener('resize', updateViewportSize);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportSize);
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1350,7 +3305,7 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
     };
 
     const render = () => {
-      const size = SPHERE_SIZE_PRESETS[sizeKey];
+      const size = getResponsiveSphereSize(sizeKey, viewportSize);
       const pixelRatio = window.devicePixelRatio || 1;
 
       canvas.width = size * pixelRatio;
@@ -1435,10 +3390,10 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
         window.cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [activePathway, points, sizeKey]);
+  }, [activePathway, points, sizeKey, viewportSize]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (isInteractionDisabled || isPathwayControllingSphere) {
+    if (isSphereInputDisabled || isPathwayControllingSphere) {
       return;
     }
 
@@ -1449,7 +3404,7 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (isInteractionDisabled || isPathwayControllingSphere || !dragRef.current.isDragging) {
+    if (isSphereInputDisabled || isPathwayControllingSphere || !dragRef.current.isDragging) {
       return;
     }
 
@@ -1488,13 +3443,35 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
       className={[
         'ascii-shell',
         activePathway ? 'pathway-active' : '',
+        isDedicatedLibraryEnvironment ? 'library-environment-active' : '',
+        isStudentSettingsOpen ? 'student-settings-active' : '',
         visiblePathway ? `pathway-state-${visiblePathwayState}` : '',
         visiblePathwayClass,
       ].join(' ')}
       data-active-pathway={activePathway?.id ?? 'none'}
+      data-sphere-environment={sphereEnvironmentState}
       data-visible-pathway={visiblePathway?.id ?? 'none'}
       data-visible-pathway-state={visiblePathwayState}
     >
+      {(!activePathway || isDedicatedLibraryEnvironment) && !isStudentSettingsOpen && (
+        <ControlCenterDock
+          preferences={dockPreferences}
+          recentMaterial={materialLayer.lastActiveMaterial}
+          weather={weatherContext}
+          onOpenStudentSettings={openStudentSettings}
+        />
+      )}
+
+      {isStudentSettingsOpen && (
+        <StudentSettingsEnvironment
+          preferences={dockPreferences}
+          state={sphereEnvironmentState}
+          onOpenLibraryConnections={openLibraryConnectionsFromSettings}
+          onPreferenceChange={(patch) => setDockPreferences((current) => normalizeDockPreferences({ ...current, ...patch }))}
+          onReturnToSphere={returnToSphereOrientation}
+        />
+      )}
+
       <div className="pathway-orientation-layer">
         {pathwayModels.map((pathway) => (
           <PathwayLabel
@@ -1530,36 +3507,77 @@ export function SphereUI({ isInteractionDisabled = false, onReturnToThreshold }:
           onReturnFromOverview={returnOneDepth}
         />
       ))}
-      {pathwayModels.map((pathway) => (
-        <PathwayEnvironment
-          key={`${pathway.id}-environment`}
-          pathway={pathway}
-          activeMaterial={activeMaterial}
-          materials={materialLayer.materials}
-          relationships={materialLayer.relationships}
-          orientation={orientation}
-          relationshipVisibilityMode={relationshipVisibilityMode}
-          onCaptureMaterial={materialLayer.captureMaterial}
-          onCompleteMaterial={materialLayer.completeMaterial}
-          onComposeFromMaterial={materialLayer.composeFromMaterial}
-          onEnterMaterial={(materialId, sectionId) => enterMaterial(pathway.id, materialId, sectionId)}
-          onEnterSection={(sectionId) => enterSection(pathway.id, sectionId)}
-          onLinkMaterial={materialLayer.linkMaterial}
-          onOpenMaterial={materialLayer.openMaterial}
-          onRemoveMaterial={materialLayer.removeMaterial}
-          onRouteMaterial={materialLayer.routeMaterial}
-          onSelectMaterial={materialLayer.setActiveMaterialId}
-          onSetPathwayInteractionState={(state) => {
-            if (state === 'expanded') {
-              expandPathway(pathway.id, pathway.sections.length === 0);
-              return;
-            }
+      {pathwayModels.map((pathway) => {
+        if (isDedicatedLibraryEnvironment && pathway.id === 'library') {
+          return null;
+        }
 
-            setPathwayInteractionState(pathway.id, state);
-          }}
-          onReturnFromPathway={returnOneDepth}
+        return (
+          <PathwayEnvironment
+            key={`${pathway.id}-environment`}
+            pathway={pathway}
+            activeMaterial={activeMaterial}
+            discoveryState={bookDiscoveryState}
+            materials={materialLayer.materials}
+            relationships={materialLayer.relationships}
+            orientation={orientation}
+            relationshipVisibilityMode={relationshipVisibilityMode}
+            onCaptureMaterial={materialLayer.captureMaterial}
+            onCompleteMaterial={materialLayer.completeMaterial}
+            onComposeFromMaterial={materialLayer.composeFromMaterial}
+            onEnterMaterial={(materialId, sectionId) => enterMaterial(pathway.id, materialId, sectionId)}
+            onEnterSection={(sectionId) => enterSection(pathway.id, sectionId)}
+            onLinkMaterial={materialLayer.linkMaterial}
+            onOpenMaterial={materialLayer.openMaterial}
+            onRemoveMaterial={materialLayer.removeMaterial}
+            onRouteMaterial={materialLayer.routeMaterial}
+            onAddLibraryBookCitation={materialLayer.addLibraryBookCitation}
+            onAddLibraryBookHighlight={materialLayer.addLibraryBookHighlight}
+            onAddLibraryBookNote={materialLayer.addLibraryBookNote}
+            onSaveLibraryBookMaterial={materialLayer.saveLibraryBookMaterial}
+            onSelectMaterial={(materialId) => materialLayer.activateMaterialById(pathway.id, materialId)}
+            onSetDiscoveryState={setBookDiscoveryState}
+            onUpdateLibraryBookRelationship={materialLayer.updateLibraryBookRelationship}
+            onSetPathwayInteractionState={(state) => {
+              if (state === 'expanded') {
+                expandPathway(pathway.id, pathway.sections.length === 0);
+                return;
+              }
+
+              setPathwayInteractionState(pathway.id, state);
+            }}
+            onReturnFromPathway={returnOneDepth}
+          />
+        );
+      })}
+
+      {isDedicatedLibraryEnvironment && visiblePathway?.id === 'library' && (
+        <LibraryEnvironmentShell
+          pathway={visiblePathway}
+          activeMaterial={activeMaterial}
+          discoveryState={bookDiscoveryState}
+          libraryAccounts={libraryAccounts}
+          materials={materialLayer.materials}
+          orientation={orientation}
+          onAddLibraryBookCitation={materialLayer.addLibraryBookCitation}
+          onAddLibraryBookHighlight={materialLayer.addLibraryBookHighlight}
+          onAddLibraryBookNote={materialLayer.addLibraryBookNote}
+          onBeginLibraryAccountConnection={beginLibraryAccountConnection}
+          onCancelLibraryAccountConnection={cancelLibraryAccountConnection}
+          onDeclineLibraryAccountConnection={declineLibraryAccountConnection}
+          onDisconnectLibraryAccount={disconnectLibraryAccount}
+          onEnterMaterial={(materialId, sectionId) => enterMaterial('library', materialId, sectionId)}
+          onEnterSection={(sectionId) => enterSection('library', sectionId)}
+          onReturnOneDepth={returnOneDepth}
+          onReturnToLibraryLanding={() => expandPathway('library')}
+          onReturnToPathwayOverview={() => returnToPathwayOverview('library')}
+          onSaveLibraryBookMaterial={materialLayer.saveLibraryBookMaterial}
+          onSelectMaterial={(materialId) => materialLayer.activateMaterialById('library', materialId)}
+          onSetDiscoveryState={setBookDiscoveryState}
+          onSetPrototypeLibraryAccountStatus={setPrototypeLibraryAccountStatus}
+          onUpdateLibraryBookRelationship={materialLayer.updateLibraryBookRelationship}
         />
-      ))}
+      )}
 
       <aside className="ascii-panel" aria-label="Sphere size controls">
         <span className="ascii-panel-label">scale</span>

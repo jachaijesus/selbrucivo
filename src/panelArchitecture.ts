@@ -461,5 +461,24 @@ export function usePanelArchitecture<PathwayId extends string>(
         delete returningTimerRefs.current[pathwayId];
       }, 760);
     },
+    returnToPathwayOverview: (pathwayId: PathwayId) => {
+      if (!pathwayMap.get(pathwayId)?.enabled) {
+        setPathwayState(pathwayId, 'unavailable');
+        return;
+      }
+
+      clearFocusedTimer(pathwayId);
+      setPathwayState(pathwayId, 'selected');
+      setTrail([
+        createSphereNode(),
+        {
+          id: createPathwayPanelId(pathwayId, 'pathway-overview'),
+          level: 'pathway-overview',
+          state: 'selected',
+          pathwayId,
+          parentId: 'sphere',
+        },
+      ]);
+    },
   };
 }

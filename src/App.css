@@ -137,36 +137,6 @@ body {
   animation: release-orbitals 5.8s ease 0.4s forwards;
 }
 
-.sphere-final-message {
-  position: fixed;
-  left: 50%;
-  top: clamp(1.1rem, 4vh, 2rem);
-  z-index: 6;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.45rem 1.2rem;
-  width: min(44rem, calc(100vw - 2rem));
-  color: rgba(220, 233, 228, 0.8);
-  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: clamp(0.58rem, 1vw, 0.74rem);
-  letter-spacing: 0.15em;
-  line-height: 1.45;
-  text-align: center;
-  text-transform: uppercase;
-  text-shadow: 0 0 1rem rgba(53, 233, 255, 0.18);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(-50%) translateY(-0.55rem);
-  animation: ready-message-settle 7s ease forwards;
-}
-
-.sphere-final-message span + span::before {
-  content: "/";
-  margin-right: 1.2rem;
-  color: rgba(240, 211, 106, 0.48);
-}
-
 @keyframes sphere-stage-resolve {
   0%,
   42% {

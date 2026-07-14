@@ -3,6 +3,17 @@ import type { CSSProperties } from 'react';
 import { LoginUI } from './components/LoginUI';
 import { SphereUI } from './components/SphereUI';
 import { TransitionLayer, type TransitionDirection, type TransitionPhase } from './components/TransitionLayer';
+import {
+  canAccessAfterOrientation,
+  createInitialSignupProtocolState,
+  getSignupProtocolStatus,
+  prepareOrientationEnvironment,
+  type OrientationDisciplineId,
+  type OrientationPracticeId,
+  type OrientationWorkspaceComponent,
+  type SignupProtocolField,
+  type SignupProtocolStep,
+} from './domain/signupProtocol';
 import './App.css';
 
 type AppState = 'login' | 'entering' | 'sphere_active' | 'exiting';
@@ -36,6 +47,7 @@ const TRANSITION_END_MS: Record<TransitionDirection, number> = {
 export function App() {
   const [appState, setAppState] = useState<AppState>('login');
   const [phase, setPhase] = useState<TransitionPhase>('idle');
+  const [signupProtocol, setSignupProtocol] = useState(createInitialSignupProtocolState);
 
   const isEntering = appState === 'entering';
   const isExiting = appState === 'exiting';
@@ -62,6 +74,9 @@ export function App() {
     const finishTimer = window.setTimeout(() => {
       setAppState(isExiting ? 'login' : 'sphere_active');
       setPhase('complete');
+      if (isExiting) {
+        setSignupProtocol(createInitialSignupProtocolState());
+      }
     }, TRANSITION_END_MS[transitionDirection]);
 
     return () => {
@@ -77,6 +92,124 @@ export function App() {
 
     setAppState('entering');
     setPhase('access-pressed');
+  };
+
+  const setSignupStep = (step: SignupProtocolStep) => {
+    setSignupProtocol((current) => ({
+      ...current,
+      step,
+      status: getSignupProtocolStatus({ ...current, step }),
+    }));
+  };
+
+  const updateSignupField = (field: SignupProtocolField, value: string) => {
+    setSignupProtocol((current) => {
+      const identity = {
+        ...current.profile.identity,
+        [field]: value,
+      };
+      const next = {
+        ...current,
+        profile: {
+          ...current.profile,
+          identity,
+          environment: prepareOrientationEnvironment({
+            identity,
+            practices: current.profile.practices,
+            disciplines: current.profile.disciplines,
+          }),
+        },
+      };
+
+      return {
+        ...next,
+        status: getSignupProtocolStatus(next),
+      };
+    });
+  };
+
+  const toggleOrientationPractice = (practice: OrientationPracticeId) => {
+    setSignupProtocol((current) => {
+      const hasPractice = current.profile.practices.includes(practice);
+      const practices = hasPractice
+        ? current.profile.practices.filter((item) => item !== practice)
+        : [...current.profile.practices, practice];
+      const next = {
+        ...current,
+        profile: {
+          ...current.profile,
+          practices,
+          environment: prepareOrientationEnvironment({
+            identity: current.profile.identity,
+            practices,
+            disciplines: current.profile.disciplines,
+          }),
+        },
+      };
+
+      return {
+        ...next,
+        status: getSignupProtocolStatus(next),
+      };
+    });
+  };
+
+  const toggleOrientationDiscipline = (discipline: OrientationDisciplineId) => {
+    setSignupProtocol((current) => {
+      const hasDiscipline = current.profile.disciplines.includes(discipline);
+      const disciplines = hasDiscipline
+        ? current.profile.disciplines.filter((item) => item !== discipline)
+        : [...current.profile.disciplines, discipline];
+      const next = {
+        ...current,
+        profile: {
+          ...current.profile,
+          disciplines,
+          environment: prepareOrientationEnvironment({
+            identity: current.profile.identity,
+            practices: current.profile.practices,
+            disciplines,
+          }),
+        },
+      };
+
+      return {
+        ...next,
+        status: getSignupProtocolStatus(next),
+      };
+    });
+  };
+
+  const toggleOrientationWorkspaceComponent = (component: OrientationWorkspaceComponent) => {
+    setSignupProtocol((current) => {
+      const hasComponent = current.profile.environment.initialVisible.includes(component);
+      const initialVisible = hasComponent
+        ? current.profile.environment.initialVisible.filter((item) => item !== component)
+        : [...current.profile.environment.initialVisible, component];
+      const next = {
+        ...current,
+        profile: {
+          ...current.profile,
+          environment: {
+            ...current.profile.environment,
+            initialVisible,
+          },
+        },
+      };
+
+      return {
+        ...next,
+        status: getSignupProtocolStatus(next),
+      };
+    });
+  };
+
+  const accessAfterOrientation = () => {
+    if (!canAccessAfterOrientation(signupProtocol)) {
+      return;
+    }
+
+    beginEntryTransition();
   };
 
   const beginExitTransition = () => {
@@ -109,6 +242,7 @@ export function App() {
         >
           <SphereUI
             isInteractionDisabled={isTransitioning}
+            orientationIdentity={signupProtocol.profile.identity}
             onReturnToThreshold={appState === 'sphere_active' ? beginExitTransition : undefined}
           />
         </div>
@@ -117,20 +251,20 @@ export function App() {
       {showLogin && (
         <LoginUI
           isTransitioning={isTransitioning}
+          signupProtocol={signupProtocol}
           transitionDirection={transitionDirection}
           onAccess={beginEntryTransition}
+          onAccessAfterOrientation={accessAfterOrientation}
+          onSetSignupStep={setSignupStep}
+          onToggleOrientationDiscipline={toggleOrientationDiscipline}
+          onToggleOrientationPractice={toggleOrientationPractice}
+          onToggleOrientationWorkspaceComponent={toggleOrientationWorkspaceComponent}
+          onUpdateSignupField={updateSignupField}
         />
       )}
 
       {isTransitioning && <TransitionLayer direction={transitionDirection} phase={phase} />}
 
-      {appState === 'sphere_active' && (
-        <div className="sphere-final-message" aria-live="polite">
-          <span>SUPPORT NETWORK ACTIVE</span>
-          <span>WELCOME TO SELBRUCIVO</span>
-          <span>SELECT A PATHWAY</span>
-        </div>
-      )}
     </div>
   );
 }

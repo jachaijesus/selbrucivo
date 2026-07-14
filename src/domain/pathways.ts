@@ -94,7 +94,7 @@ export const PATHWAY_REGISTRY: PathwayDefinition[] = [
     purpose: 'Active study / current engagement',
     entryAction: 'OPEN LIBRARY',
     entryEnvironment: 'LIBRARY',
-    overview: ['Overview: Active Materials', 'Recently Opened', 'Current Studies', 'Suggested Return', 'OPEN LIBRARY'],
+    overview: ['Overview', 'Current Studies', 'Recently Opened', 'Reading / Listening Queue', 'Reference Shelf', 'Unsorted Materials'],
     counts: ['21 Active Materials', '8 Recent Returns'],
     summary: 'Active Study / Open Materials / Current Engagement',
     preview: ['Recently Opened: Available', 'Current Studies: In Progress'],

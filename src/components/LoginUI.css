@@ -252,6 +252,10 @@
   z-index: 1;
 }
 
+.access-panel.is-orienting #access-form {
+  display: none;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -335,6 +339,250 @@
 
 .login-entry button:disabled {
   cursor: default;
+}
+
+.signup-protocol {
+  position: relative;
+  z-index: 1;
+  margin-top: 1.15rem;
+}
+
+.signup-protocol-trigger,
+.signup-inline-control,
+.orientation-choice {
+  width: auto;
+  min-height: 2.35rem;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, rgba(91, 190, 174, 0.08), rgba(85, 211, 127, 0.03)),
+    rgba(2, 8, 7, 0.16);
+  color: rgba(180, 229, 221, 0.72);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+}
+
+.signup-protocol-trigger {
+  border-color: rgba(91, 190, 174, 0.28);
+  text-transform: uppercase;
+}
+
+.signup-protocol-surface {
+  display: grid;
+  gap: 0.9rem;
+  max-height: min(27rem, calc(100svh - 16rem));
+  overflow: auto;
+  border-left: 1px solid rgba(91, 190, 174, 0.24);
+  padding-left: 1rem;
+  padding-right: 0.25rem;
+  scrollbar-color: rgba(91, 190, 174, 0.38) transparent;
+}
+
+.signup-protocol-heading,
+.signup-protocol-steps,
+.orientation-summary,
+.orientation-rationale {
+  display: grid;
+  gap: 0.38rem;
+  color: rgba(180, 229, 221, 0.48);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.11em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.signup-protocol-heading {
+  grid-template-columns: 1fr auto;
+  color: rgba(220, 233, 228, 0.68);
+}
+
+.signup-protocol-heading span:last-child {
+  color: rgba(240, 211, 106, 0.58);
+}
+
+.signup-protocol-steps {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.signup-protocol-steps span {
+  min-width: 0;
+  border-top: 1px solid rgba(91, 190, 174, 0.18);
+  padding-top: 0.42rem;
+}
+
+.signup-protocol-steps .is-active {
+  border-top-color: rgba(240, 211, 106, 0.64);
+  color: rgba(240, 211, 106, 0.72);
+}
+
+.orientation-panel {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.orientation-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.orientation-copy h2,
+.orientation-discipline-group h3 {
+  margin: 0;
+  color: rgba(220, 233, 228, 0.74);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.74rem;
+  font-weight: 400;
+  letter-spacing: 0.13em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.orientation-copy p,
+.orientation-field p {
+  margin: 0;
+  color: rgba(180, 229, 221, 0.5);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.orientation-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.95rem 1rem;
+}
+
+.orientation-field {
+  display: grid;
+  align-content: start;
+  gap: 0.32rem;
+}
+
+.login-entry select {
+  width: 100%;
+  min-height: 2.4rem;
+  border: 0;
+  border-bottom: 1px solid rgba(91, 190, 174, 0.24);
+  border-radius: 0;
+  outline: none;
+  background: rgba(2, 8, 7, 0.86);
+  color: rgba(220, 233, 228, 0.7);
+  padding: 0 0 0.54rem;
+  font: 400 0.86rem/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.03em;
+}
+
+.login-entry select:focus {
+  border-bottom-color: rgba(91, 190, 174, 0.82);
+  box-shadow: 0 0.85rem 1.6rem rgba(85, 211, 127, 0.065);
+}
+
+.orientation-choice-grid,
+.orientation-environment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.62rem;
+}
+
+.orientation-choice-grid.is-compact {
+  gap: 0.48rem;
+}
+
+.orientation-discipline-groups {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.orientation-discipline-group {
+  display: grid;
+  gap: 0.48rem;
+}
+
+.orientation-discipline-group h3 {
+  color: rgba(240, 211, 106, 0.6);
+  font-size: 0.62rem;
+}
+
+.orientation-choice {
+  border-color: rgba(91, 190, 174, 0.22);
+}
+
+.orientation-choice span,
+.orientation-choice small {
+  display: block;
+}
+
+.orientation-choice small {
+  margin-top: 0.28rem;
+  color: rgba(180, 229, 221, 0.42);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+}
+
+.orientation-choice.is-selected {
+  border-color: rgba(240, 211, 106, 0.48);
+  color: rgba(240, 211, 106, 0.78);
+  box-shadow: inset 0 0 1.1rem rgba(240, 211, 106, 0.055);
+}
+
+.orientation-choice.is-selected small {
+  color: rgba(240, 211, 106, 0.56);
+}
+
+.orientation-rationale {
+  gap: 0.42rem;
+  border-top: 1px solid rgba(91, 190, 174, 0.16);
+  padding-top: 0.72rem;
+  color: rgba(180, 229, 221, 0.5);
+  text-transform: none;
+}
+
+.orientation-summary {
+  gap: 0.48rem;
+  border-left: 1px solid rgba(240, 211, 106, 0.28);
+  padding-left: 0.85rem;
+  color: rgba(220, 233, 228, 0.65);
+}
+
+.signup-protocol-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.signup-inline-control {
+  border-color: rgba(91, 190, 174, 0.34);
+  text-align: center;
+}
+
+.signup-inline-control.is-primary-access {
+  border-color: rgba(240, 211, 106, 0.58);
+  color: rgba(240, 211, 106, 0.84);
+  box-shadow: inset 0 0 1.4rem rgba(240, 211, 106, 0.06);
+}
+
+.signup-protocol-trigger:hover,
+.signup-protocol-trigger:focus-visible,
+.signup-inline-control:hover,
+.signup-inline-control:focus-visible,
+.orientation-choice:hover,
+.orientation-choice:focus-visible {
+  transform: translateY(-1px);
+}
+
+.signup-protocol-trigger:disabled,
+.signup-inline-control:disabled,
+.orientation-choice:disabled {
+  opacity: 0.42;
+  transform: none;
 }
 
 .microcopy {
@@ -800,5 +1048,39 @@
     height: 3.2rem;
     aspect-ratio: auto;
     border-radius: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .login-entry .signup-protocol-trigger,
+  .login-entry .signup-inline-control,
+  .login-entry .orientation-choice {
+    width: auto;
+    height: auto;
+    min-height: 2.35rem;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .signup-protocol-steps,
+  .orientation-field-grid,
+  .orientation-choice-grid,
+  .orientation-environment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .signup-protocol-surface {
+    max-height: min(31rem, calc(100svh - 12rem));
+  }
+
+  .signup-protocol-actions {
+    justify-content: stretch;
+  }
+
+  .login-entry .signup-inline-control,
+  .login-entry .signup-protocol-trigger {
+    width: 100%;
   }
 }
