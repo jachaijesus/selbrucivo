@@ -215,6 +215,37 @@ button {
   outline-offset: 5px;
 }
 
+.demo-session-badge {
+  position: fixed;
+  left: var(--frame-edge);
+  top: clamp(1rem, 3.8vh, 2rem);
+  z-index: 5;
+  display: grid;
+  gap: 0.18rem;
+  color: rgba(240, 211, 106, 0.84);
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  pointer-events: none;
+  text-shadow:
+    0 0 10px rgba(240, 211, 106, 0.18),
+    0 0 24px rgba(53, 233, 255, 0.1);
+}
+
+.demo-session-badge span {
+  width: fit-content;
+  border: 1px solid rgba(240, 211, 106, 0.42);
+  padding: 0.28rem 0.42rem;
+  background: rgba(2, 3, 4, 0.72);
+}
+
+.demo-session-badge small {
+  color: rgba(213, 251, 244, 0.58);
+  font-size: 0.52rem;
+  letter-spacing: 0.13em;
+}
+
 .student-settings-active .pathway-orientation-layer,
 .student-settings-active .ascii-stage,
 .student-settings-active .ascii-panel {
@@ -1999,6 +2030,17 @@ button {
   opacity: 0.34;
 }
 
+.demo-reset-control {
+  order: 3;
+  margin-top: 0.16rem;
+  color: rgba(240, 211, 106, 0.62);
+}
+
+.demo-reset-control + .ascii-return-control {
+  order: 4;
+  margin-top: 0;
+}
+
 .ascii-size-node {
   position: relative;
   width: 16px;
@@ -2409,6 +2451,12 @@ button {
   .ascii-panel {
     bottom: 14px;
     gap: 5px;
+  }
+
+  .demo-session-badge {
+    left: 14px;
+    top: 14px;
+    font-size: 0.5rem;
   }
 
   .ascii-size-selector {

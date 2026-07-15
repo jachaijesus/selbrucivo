@@ -27,6 +27,120 @@ body {
   background: #020304;
 }
 
+.demo-entry {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.25rem, 6vw, 4rem);
+  color: rgba(213, 251, 244, 0.82);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(33, 245, 138, 0.11), transparent 27rem),
+    radial-gradient(circle at 72% 28%, rgba(53, 233, 255, 0.08), transparent 19rem),
+    linear-gradient(rgba(33, 245, 138, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(53, 233, 255, 0.028) 1px, transparent 1px),
+    #020304;
+  background-size: auto, auto, 34px 34px, 34px 34px, auto;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.demo-entry-panel {
+  display: grid;
+  gap: 1.1rem;
+  width: min(100%, 42rem);
+  border-left: 1px solid rgba(240, 211, 106, 0.36);
+  padding: clamp(1rem, 4vw, 2.35rem);
+  background: linear-gradient(90deg, rgba(2, 3, 4, 0.72), rgba(2, 3, 4, 0.24));
+  box-shadow: -1.2rem 0 3rem rgba(33, 245, 138, 0.04);
+}
+
+.demo-entry-kicker {
+  margin: 0;
+  color: rgba(53, 233, 255, 0.62);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.demo-entry h1 {
+  margin: 0;
+  color: rgba(240, 211, 106, 0.92);
+  font-size: clamp(1.6rem, 5.4vw, 3.9rem);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.02;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 16px rgba(240, 211, 106, 0.16),
+    0 0 34px rgba(33, 245, 138, 0.1);
+}
+
+.demo-entry p:not(.demo-entry-kicker) {
+  max-width: 38rem;
+  margin: 0;
+  color: rgba(213, 251, 244, 0.74);
+  font-size: clamp(0.88rem, 1.8vw, 1.05rem);
+  letter-spacing: 0;
+  line-height: 1.7;
+}
+
+.demo-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.78rem;
+  padding-top: 0.35rem;
+}
+
+.demo-entry-primary,
+.demo-entry-secondary {
+  min-height: 2.75rem;
+  border: 1px solid rgba(53, 233, 255, 0.34);
+  padding: 0.76rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.demo-entry-primary {
+  background: rgba(33, 245, 138, 0.12);
+  color: rgba(240, 211, 106, 0.92);
+}
+
+.demo-entry-secondary {
+  background: rgba(2, 3, 4, 0.42);
+  color: rgba(213, 251, 244, 0.7);
+}
+
+.demo-entry-primary:hover,
+.demo-entry-primary:focus-visible,
+.demo-entry-secondary:hover,
+.demo-entry-secondary:focus-visible {
+  border-color: rgba(240, 211, 106, 0.66);
+  color: rgba(240, 211, 106, 0.94);
+  transform: translateY(-1px);
+}
+
+.demo-entry-primary:focus,
+.demo-entry-secondary:focus {
+  outline: none;
+}
+
+.demo-entry-primary:focus-visible,
+.demo-entry-secondary:focus-visible {
+  outline: 1px solid rgba(240, 211, 106, 0.58);
+  outline-offset: 4px;
+}
+
 .sphere-reveal-stage {
   position: fixed;
   inset: 0;

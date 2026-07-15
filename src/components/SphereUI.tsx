@@ -2866,7 +2866,9 @@ function drawProjectedPath(
 
 type SphereUIProps = {
   isInteractionDisabled?: boolean;
+  isDemoMode?: boolean;
   orientationIdentity?: OrientationIdentity;
+  onResetDemo?: () => void;
   onReturnToThreshold?: () => void;
 };
 
@@ -2897,7 +2899,13 @@ const createInitialBookDiscoveryState = (): BookDiscoveryState => ({
   status: 'Search by title, author, ISBN, subject, or keyword.',
 });
 
-export function SphereUI({ isInteractionDisabled = false, orientationIdentity, onReturnToThreshold }: SphereUIProps) {
+export function SphereUI({
+  isInteractionDisabled = false,
+  isDemoMode = false,
+  orientationIdentity,
+  onResetDemo,
+  onReturnToThreshold,
+}: SphereUIProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
   const rotationRef = useRef<Rotation>({ ...NEUTRAL_ROTATION });
@@ -3475,6 +3483,13 @@ export function SphereUI({ isInteractionDisabled = false, orientationIdentity, o
       data-visible-pathway={visiblePathway?.id ?? 'none'}
       data-visible-pathway-state={visiblePathwayState}
     >
+      {isDemoMode && (
+        <div className="demo-session-badge" role="status" aria-label="Investor demonstration mode">
+          <span>DEMO</span>
+          <small>Investor Demonstration</small>
+        </div>
+      )}
+
       {(!activePathway || isDedicatedLibraryEnvironment) && !isStudentSettingsOpen && (
         <ControlCenterDock
           preferences={dockPreferences}
@@ -3641,6 +3656,17 @@ export function SphereUI({ isInteractionDisabled = false, orientationIdentity, o
             );
           })}
         </div>
+
+        {onResetDemo && (
+          <button
+            className="ascii-return-control demo-reset-control"
+            type="button"
+            disabled={isInteractionDisabled}
+            onClick={onResetDemo}
+          >
+            Reset Demo
+          </button>
+        )}
 
         {onReturnToThreshold && (
           <button

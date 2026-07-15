@@ -6,6 +6,7 @@ import { TransitionLayer, type TransitionDirection, type TransitionPhase } from 
 import {
   canAccessAfterOrientation,
   createInitialSignupProtocolState,
+  createInvestorDemoSignupProtocolState,
   getSignupProtocolStatus,
   prepareOrientationEnvironment,
   type OrientationDisciplineId,
@@ -17,6 +18,7 @@ import {
 import './App.css';
 
 type AppState = 'login' | 'entering' | 'sphere_active' | 'exiting';
+type AppRoute = 'threshold' | 'demo';
 
 const ENABLE_LOCAL_ACCESS_BYPASS = (
   import.meta.env.DEV &&
@@ -49,10 +51,50 @@ const TRANSITION_END_MS: Record<TransitionDirection, number> = {
   exit: 10200,
 };
 
+function getRouteFromLocation(): AppRoute {
+  return window.location.pathname === '/demo' ? 'demo' : 'threshold';
+}
+
+function getRoutePath(route: AppRoute) {
+  return route === 'demo' ? '/demo' : '/';
+}
+
+function InvestorDemoEntry({
+  onEnterDemo,
+  onReturnToThreshold,
+}: {
+  onEnterDemo: () => void;
+  onReturnToThreshold: () => void;
+}) {
+  return (
+    <section className="demo-entry" aria-labelledby="investor-demo-title">
+      <div className="demo-entry-panel">
+        <p className="demo-entry-kicker">public preview route</p>
+        <h1 id="investor-demo-title">Investor Demonstration</h1>
+        <p>
+          This public demonstration uses a fictional, non-sensitive profile to provide direct access
+          to the current Selbrucivo interface. It is a convenience preview&mdash;not a private account,
+          authenticated session, or completed product.
+        </p>
+        <div className="demo-entry-actions">
+          <button className="demo-entry-primary" type="button" onClick={onEnterDemo}>
+            Enter Demo
+          </button>
+          <button className="demo-entry-secondary" type="button" onClick={onReturnToThreshold}>
+            Return to Threshold
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function App() {
   const [appState, setAppState] = useState<AppState>('login');
   const [phase, setPhase] = useState<TransitionPhase>('idle');
   const [signupProtocol, setSignupProtocol] = useState(createInitialSignupProtocolState);
+  const [route, setRoute] = useState<AppRoute>(getRouteFromLocation);
+  const [isDemoSession, setIsDemoSession] = useState(false);
 
   const isEntering = appState === 'entering';
   const isExiting = appState === 'exiting';
@@ -60,7 +102,8 @@ export function App() {
   const transitionDirection: TransitionDirection = isExiting ? 'exit' : 'enter';
   const phaseSchedule = isExiting ? EXIT_PHASE_SCHEDULE : ENTER_PHASE_SCHEDULE;
   const showSphere = appState !== 'login';
-  const showLogin = appState !== 'sphere_active' || isExiting;
+  const showDemoEntry = route === 'demo' && appState === 'login' && !isDemoSession;
+  const showLogin = !showDemoEntry && (appState !== 'sphere_active' || isExiting);
 
   const phaseIndex = useMemo(
     () => phaseSchedule.findIndex((item) => item.phase === phase),
@@ -80,6 +123,7 @@ export function App() {
       setAppState(isExiting ? 'login' : 'sphere_active');
       setPhase('complete');
       if (isExiting) {
+        setIsDemoSession(false);
         setSignupProtocol(createInitialSignupProtocolState());
       }
     }, TRANSITION_END_MS[transitionDirection]);
@@ -90,6 +134,30 @@ export function App() {
     };
   }, [isExiting, isTransitioning, phaseSchedule, transitionDirection]);
 
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextRoute = getRouteFromLocation();
+
+      setRoute(nextRoute);
+      setIsDemoSession(false);
+      setAppState('login');
+      setPhase('idle');
+      setSignupProtocol(createInitialSignupProtocolState());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateToRoute = (nextRoute: AppRoute) => {
+    setRoute(nextRoute);
+    const nextPath = getRoutePath(nextRoute);
+
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, '', nextPath);
+    }
+  };
+
   const beginEntryTransition = () => {
     if (appState !== 'login') {
       return;
@@ -97,6 +165,16 @@ export function App() {
 
     setAppState('entering');
     setPhase('access-pressed');
+  };
+
+  const beginInvestorDemo = () => {
+    if (appState !== 'login') {
+      return;
+    }
+
+    setSignupProtocol(createInvestorDemoSignupProtocolState());
+    setIsDemoSession(true);
+    beginEntryTransition();
   };
 
   const setSignupStep = (step: SignupProtocolStep) => {
@@ -226,6 +304,28 @@ export function App() {
     setPhase('sphere-interactive');
   };
 
+  const resetInvestorDemo = () => {
+    navigateToRoute('demo');
+    setIsDemoSession(false);
+    setAppState('login');
+    setPhase('idle');
+    setSignupProtocol(createInitialSignupProtocolState());
+  };
+
+  const returnToThreshold = () => {
+    navigateToRoute('threshold');
+    setIsDemoSession(false);
+
+    if (appState === 'sphere_active') {
+      beginExitTransition();
+      return;
+    }
+
+    setAppState('login');
+    setPhase('idle');
+    setSignupProtocol(createInitialSignupProtocolState());
+  };
+
   return (
     <div
       className={[
@@ -247,10 +347,19 @@ export function App() {
         >
           <SphereUI
             isInteractionDisabled={isTransitioning}
+            isDemoMode={isDemoSession}
             orientationIdentity={signupProtocol.profile.identity}
-            onReturnToThreshold={appState === 'sphere_active' ? beginExitTransition : undefined}
+            onResetDemo={isDemoSession && appState === 'sphere_active' ? resetInvestorDemo : undefined}
+            onReturnToThreshold={appState === 'sphere_active' ? (isDemoSession ? returnToThreshold : beginExitTransition) : undefined}
           />
         </div>
+      )}
+
+      {showDemoEntry && (
+        <InvestorDemoEntry
+          onEnterDemo={beginInvestorDemo}
+          onReturnToThreshold={returnToThreshold}
+        />
       )}
 
       {showLogin && (

@@ -189,6 +189,15 @@ export const ORIENTATION_DISCIPLINE_GROUPS: OrientationDisciplineGroup[] = [
 ];
 
 export const SCHOOL_STATUS_OPTIONS = ['In school', 'Between programs', 'Independent study', 'Teaching', 'Prefer not to say'];
+
+function getBrowserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export function normalizeOrientationText(value: string) {
   return value.trim().replace(/\s+/g, ' ');
 }
@@ -209,7 +218,7 @@ export function createInitialOrientationIdentity(): OrientationIdentity {
     schoolName: '',
     programOfStudy: '',
     preferredLanguage: '',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timeZone: getBrowserTimeZone(),
   };
 }
 
@@ -252,6 +261,34 @@ export function createInitialSignupProtocolState(): OrientationState {
       practices,
       disciplines,
       environment: prepareOrientationEnvironment({ identity, practices, disciplines }),
+    },
+  };
+}
+
+export function createInvestorDemoSignupProtocolState(): OrientationState {
+  const identity: OrientationIdentity = {
+    ...createInitialOrientationIdentity(),
+    preferredName: 'Mira',
+    addressName: 'Mira',
+    schoolStatus: 'Independent study',
+    preferredLanguage: 'English',
+    timeZone: getBrowserTimeZone(),
+  };
+  const practices: OrientationPracticeId[] = ['study-intentionally', 'organize-research'];
+  const disciplines: OrientationDisciplineId[] = ['writing', 'interior-design'];
+  const environment: OrientationEnvironment = {
+    ...prepareOrientationEnvironment({ identity, practices, disciplines }),
+    initialVisible: ['Archive', 'Library', 'Train Station', 'Essays'],
+  };
+
+  return {
+    status: 'prepared',
+    step: 'confirmation',
+    profile: {
+      identity,
+      practices,
+      disciplines,
+      environment,
     },
   };
 }
