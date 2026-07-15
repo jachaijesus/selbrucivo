@@ -2938,12 +2938,21 @@ export function SphereUI({ isInteractionDisabled = false, orientationIdentity, o
   const visiblePathway = pathwayModels.find((pathway) => pathway.state !== 'inactive');
   const [sizeKey, setSizeKey] = useState<SizeKey>('S');
   const [sphereEnvironmentState, setSphereEnvironmentState] = useState<SphereEnvironmentState>('orientation');
+  const hasPersistentDockPreferencesRef = useRef(false);
+  const persistedDockPreferencesRef = useRef<StudentDockPreferences | undefined>(undefined);
   const [dockPreferences, setDockPreferences] = useState<StudentDockPreferences>(() => {
     const basePreferences = createDockPreferencesFromIdentity(orientationIdentity);
+    const defaultPersistentPreferences = createDockPreferencesFromIdentity();
+    persistedDockPreferencesRef.current = defaultPersistentPreferences;
 
     try {
       const stored = window.localStorage.getItem(CONTROL_CENTER_PREFERENCES_STORAGE_KEY);
       const storedPreferences = stored ? JSON.parse(stored) as Partial<StudentDockPreferences> : {};
+      hasPersistentDockPreferencesRef.current = stored !== null;
+      persistedDockPreferencesRef.current = normalizeDockPreferences({
+        ...defaultPersistentPreferences,
+        ...storedPreferences,
+      });
 
       return normalizeDockPreferences({
         ...basePreferences,
@@ -3066,10 +3075,23 @@ export function SphereUI({ isInteractionDisabled = false, orientationIdentity, o
     window.setTimeout(() => enterSection('library', 'Connected Libraries'), 0);
   };
 
+  const updateDockPreferences = (patch: Partial<StudentDockPreferences>) => {
+    hasPersistentDockPreferencesRef.current = true;
+    persistedDockPreferencesRef.current = normalizeDockPreferences({
+      ...(persistedDockPreferencesRef.current ?? createDockPreferencesFromIdentity()),
+      ...patch,
+    });
+    setDockPreferences((current) => normalizeDockPreferences({ ...current, ...patch }));
+  };
+
   useEffect(() => {
+    if (!hasPersistentDockPreferencesRef.current) {
+      return;
+    }
+
     window.localStorage.setItem(
       CONTROL_CENTER_PREFERENCES_STORAGE_KEY,
-      JSON.stringify(normalizeDockPreferences(dockPreferences)),
+      JSON.stringify(normalizeDockPreferences(persistedDockPreferencesRef.current ?? dockPreferences)),
     );
   }, [dockPreferences]);
 
@@ -3467,7 +3489,7 @@ export function SphereUI({ isInteractionDisabled = false, orientationIdentity, o
           preferences={dockPreferences}
           state={sphereEnvironmentState}
           onOpenLibraryConnections={openLibraryConnectionsFromSettings}
-          onPreferenceChange={(patch) => setDockPreferences((current) => normalizeDockPreferences({ ...current, ...patch }))}
+          onPreferenceChange={updateDockPreferences}
           onReturnToSphere={returnToSphereOrientation}
         />
       )}

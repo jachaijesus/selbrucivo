@@ -18,6 +18,11 @@ import './App.css';
 
 type AppState = 'login' | 'entering' | 'sphere_active' | 'exiting';
 
+const ENABLE_LOCAL_ACCESS_BYPASS = (
+  import.meta.env.DEV &&
+  window.localStorage.getItem('selbrucivo.localAccessBypass') === 'true'
+);
+
 const ENTER_PHASE_SCHEDULE: Array<{ phase: TransitionPhase; at: number }> = [
   { phase: 'access-pressed', at: 0 },
   { phase: 'signal-received', at: 900 },
@@ -251,6 +256,7 @@ export function App() {
       {showLogin && (
         <LoginUI
           isTransitioning={isTransitioning}
+          isLocalAccessBypassEnabled={ENABLE_LOCAL_ACCESS_BYPASS}
           signupProtocol={signupProtocol}
           transitionDirection={transitionDirection}
           onAccess={beginEntryTransition}

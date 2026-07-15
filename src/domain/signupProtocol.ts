@@ -8,11 +8,8 @@ export type OrientationIdentityField =
   | 'schoolStatus'
   | 'schoolName'
   | 'programOfStudy'
-  | 'preferredEmail'
-  | 'nationality'
   | 'preferredLanguage'
-  | 'timeZone'
-  | 'contactPreference';
+  | 'timeZone';
 
 export type OrientationPracticeId =
   | 'study-intentionally'
@@ -192,8 +189,6 @@ export const ORIENTATION_DISCIPLINE_GROUPS: OrientationDisciplineGroup[] = [
 ];
 
 export const SCHOOL_STATUS_OPTIONS = ['In school', 'Between programs', 'Independent study', 'Teaching', 'Prefer not to say'];
-export const CONTACT_PREFERENCE_OPTIONS = ['Email', 'Occasional check-in', 'Essential notices only'];
-
 export function normalizeOrientationText(value: string) {
   return value.trim().replace(/\s+/g, ' ');
 }
@@ -213,11 +208,8 @@ export function createInitialOrientationIdentity(): OrientationIdentity {
     schoolStatus: '',
     schoolName: '',
     programOfStudy: '',
-    preferredEmail: '',
-    nationality: '',
     preferredLanguage: '',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    contactPreference: '',
   };
 }
 
@@ -269,11 +261,8 @@ export function isOrientationIdentityReady(identity: OrientationIdentity) {
     normalizeOrientationText(identity.preferredName).length > 0 &&
     normalizeOrientationText(identity.addressName).length > 0 &&
     normalizeOrientationText(identity.schoolStatus).length > 0 &&
-    normalizeOrientationText(identity.preferredEmail).length > 0 &&
-    normalizeOrientationText(identity.nationality).length > 0 &&
     normalizeOrientationText(identity.preferredLanguage).length > 0 &&
-    normalizeOrientationText(identity.timeZone).length > 0 &&
-    normalizeOrientationText(identity.contactPreference).length > 0
+    normalizeOrientationText(identity.timeZone).length > 0
   );
 }
 

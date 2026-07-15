@@ -1,5 +1,5 @@
+import { useEffect, useRef } from 'react';
 import {
-  CONTACT_PREFERENCE_OPTIONS,
   ORIENTATION_DISCIPLINE_GROUPS,
   ORIENTATION_PRACTICES,
   SCHOOL_STATUS_OPTIONS,
@@ -18,6 +18,7 @@ import './LoginUI.css';
 
 type LoginUIProps = {
   isTransitioning: boolean;
+  isLocalAccessBypassEnabled: boolean;
   signupProtocol: SignupProtocolState;
   transitionDirection?: 'enter' | 'exit';
   onAccess: () => void;
@@ -68,19 +69,6 @@ const IDENTITY_FIELDS: IdentityFieldConfig[] = [
     purpose: 'Gives coursework and project material a clearer frame.',
   },
   {
-    field: 'preferredEmail',
-    label: 'Preferred email',
-    purpose: 'Reserved for essential account and archive notices.',
-    autoComplete: 'email',
-    type: 'email',
-  },
-  {
-    field: 'nationality',
-    label: 'Nationality',
-    purpose: 'Supports future language, residency, and school-context care.',
-    autoComplete: 'country-name',
-  },
-  {
     field: 'preferredLanguage',
     label: 'Preferred language',
     purpose: 'Sets the first language Selbrucivo should assume.',
@@ -90,12 +78,6 @@ const IDENTITY_FIELDS: IdentityFieldConfig[] = [
     field: 'timeZone',
     label: 'Time zone',
     purpose: 'Keeps dated notes and study rhythms locally legible.',
-  },
-  {
-    field: 'contactPreference',
-    label: 'Contact preference',
-    purpose: 'Controls the expected quietness of future communication.',
-    options: CONTACT_PREFERENCE_OPTIONS,
   },
 ];
 
@@ -116,6 +98,7 @@ const PREVIOUS_ORIENTATION_STEP: Partial<Record<SignupProtocolStep, SignupProtoc
 
 export function LoginUI({
   isTransitioning,
+  isLocalAccessBypassEnabled,
   signupProtocol,
   transitionDirection = 'enter',
   onAccess,
@@ -129,9 +112,16 @@ export function LoginUI({
   const isEntering = isTransitioning && transitionDirection === 'enter';
   const isExiting = isTransitioning && transitionDirection === 'exit';
   const isProtocolOpen = signupProtocol.step !== 'threshold';
+  const orientationSurfaceRef = useRef<HTMLDivElement>(null);
   const identityReady = isOrientationIdentityReady(signupProtocol.profile.identity);
   const canAccess = canAccessAfterOrientation(signupProtocol);
   const { identity, practices, disciplines, environment } = signupProtocol.profile;
+
+  useEffect(() => {
+    if (isProtocolOpen) {
+      orientationSurfaceRef.current?.focus();
+    }
+  }, [isProtocolOpen]);
 
   return (
     <main
@@ -173,28 +163,49 @@ export function LoginUI({
 
           <form
             id="access-form"
+            autoComplete="off"
             onSubmit={(event) => {
               event.preventDefault();
-              onAccess();
+              if (isLocalAccessBypassEnabled) {
+                onAccess();
+              } else {
+                onSetSignupStep('identity');
+              }
             }}
           >
             <p className="access-title">Enter archive</p>
-            <p className="access-context">A quiet passage into the Academy's living collection.</p>
+            <p className="access-context">A quiet passage into the Academy's living collection begins with Orientation.</p>
 
             <div className="field-row">
               <div className="field">
                 <label htmlFor="email">Email</label>
-                <input id="email" name="email" type="email" autoComplete="email" defaultValue="lorem@selbrucivo.edu" />
+                <input
+                  id="email"
+                  name="visitor-email"
+                  type="email"
+                  autoComplete="off"
+                  value=""
+                  readOnly
+                  aria-describedby="access-status"
+                />
               </div>
 
               <div className="field">
-                <label htmlFor="password">Password</label>
-                <input id="password" name="password" type="password" autoComplete="current-password" defaultValue="password" />
+                <label htmlFor="access-phrase">Access phrase</label>
+                <input
+                  id="access-phrase"
+                  name="visitor-access-phrase"
+                  type="password"
+                  autoComplete="new-password"
+                  value=""
+                  readOnly
+                  aria-describedby="access-status"
+                />
               </div>
             </div>
 
             <div className="access-line">
-              <p className="microcopy">FOR STUDY OF SELF</p>
+              <p className="microcopy" id="access-status">ORIENTATION REQUIRED</p>
               <button type="submit" disabled={isTransitioning}>ACCESS</button>
             </div>
           </form>
@@ -210,7 +221,7 @@ export function LoginUI({
                 Begin Orientation
               </button>
             ) : (
-              <div className="signup-protocol-surface">
+              <div className="signup-protocol-surface" ref={orientationSurfaceRef} tabIndex={-1}>
                 <div className="signup-protocol-heading">
                   <span>Threshold Orientation</span>
                   <span>{signupProtocol.status}</span>
@@ -229,6 +240,7 @@ export function LoginUI({
                     <div className="orientation-copy">
                       <h2 id="orientation-identity-title">Identity Framework</h2>
                       <p>Selbrucivo asks only for details that can shape address, context, language, and future care.</p>
+                      <p>This is a developmental prototype. Information entered during orientation remains within the current browser session and should not include confidential or sensitive information.</p>
                     </div>
 
                     <div className="orientation-field-grid">

@@ -383,6 +383,11 @@
   scrollbar-color: rgba(91, 190, 174, 0.38) transparent;
 }
 
+.signup-protocol-surface:focus {
+  outline: 1px solid rgba(240, 211, 106, 0.42);
+  outline-offset: 0.35rem;
+}
+
 .signup-protocol-heading,
 .signup-protocol-steps,
 .orientation-summary,

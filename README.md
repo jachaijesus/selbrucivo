@@ -106,6 +106,26 @@ VITE_ENABLE_LIBRARY_ACCOUNT_PROTOTYPE=true
 
 The prototype account provider is automatically available during Vite development through `import.meta.env.DEV`. In a production build, it is hidden unless the explicit flag is set to `"true"`. This flag is not a secret and must never contain credentials.
 
+## Local Team Access Bypass
+
+The entry-panel bypass is a local-development convenience flag, not authentication. It must not be used to represent secure login behavior, and it must not contain team credentials.
+
+To activate it for the current local browser origin, open the browser console or local storage inspector while running the Vite dev server and set:
+
+```js
+localStorage.setItem('selbrucivo.localAccessBypass', 'true');
+```
+
+Reload the page after setting the flag. The flag survives reloads for the same origin until it is removed. Browser storage is origin-scoped, so `http://localhost:5173`, `http://127.0.0.1:5173`, and a production preview URL do not share the same value.
+
+To deactivate it, remove the flag and reload:
+
+```js
+localStorage.removeItem('selbrucivo.localAccessBypass');
+```
+
+The bypass is guarded by `import.meta.env.DEV`, so it should be tree-shaken out of production builds. Confirm that before any preview handoff by running `pnpm build` and verifying that `dist/` does not contain `selbrucivo.localAccessBypass`.
+
 ## Build Verification
 
 The current handoff build command is:
