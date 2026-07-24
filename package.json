@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "test": "mkdir -p .tmp-tests && printf '{\"type\":\"commonjs\"}\\n' > .tmp-tests/package.json && tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

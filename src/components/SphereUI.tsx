@@ -59,6 +59,13 @@ import {
   type WeatherContext,
 } from '../domain/controlCenter';
 import type { OrientationIdentity } from '../domain/signupProtocol';
+import {
+  createSphereCartography,
+  type CartographyNode,
+  type SphereCartography,
+  type SupportNode,
+} from '../domain/sphereCartography';
+import { createDemoSphereMaterials } from '../domain/sphereCartographyFixtures';
 import './SphereUI.css';
 
 type SizeKey = 'XS' | 'S' | 'M' | 'L' | 'XL';
@@ -299,6 +306,22 @@ function createSeedMaterials() {
   );
 }
 
+function createInitialMaterials(isDemoMode: boolean) {
+  const seedMaterials = createSeedMaterials();
+
+  if (isDemoMode) {
+    return [...createDemoSphereMaterials(), ...seedMaterials];
+  }
+
+  try {
+    const stored = window.localStorage.getItem(MATERIAL_STORAGE_KEY);
+    const storedMaterials = stored ? JSON.parse(stored) as SphereMaterial[] : [];
+    return storedMaterials.length > 0 ? [...storedMaterials, ...seedMaterials] : seedMaterials;
+  } catch {
+    return seedMaterials;
+  }
+}
+
 function isActivePathwayState(state: PathwayState) {
   return isPanelActive(state);
 }
@@ -313,17 +336,9 @@ function getResponsiveSphereSize(sizeKey: SizeKey, viewport: { width: number; he
   return Math.round(Math.min(sizeCeiling, idealSize));
 }
 
-function useMaterialRelationshipLayer() {
+function useMaterialRelationshipLayer(isDemoMode: boolean) {
   const [materials, setMaterials] = useState<SphereMaterial[]>(() => {
-    const seedMaterials = createSeedMaterials();
-
-    try {
-      const stored = window.localStorage.getItem(MATERIAL_STORAGE_KEY);
-      const storedMaterials = stored ? JSON.parse(stored) as SphereMaterial[] : [];
-      return storedMaterials.length > 0 ? [...storedMaterials, ...seedMaterials] : seedMaterials;
-    } catch {
-      return seedMaterials;
-    }
+    return createInitialMaterials(isDemoMode);
   });
   const [relationships, setRelationships] = useState<MaterialRelationship[]>([]);
   const [activeMaterialId, setActiveMaterialId] = useState<string | undefined>(() => createSeedMaterials()[0]?.id);
@@ -347,9 +362,13 @@ function useMaterialRelationshipLayer() {
   };
 
   useEffect(() => {
+    if (isDemoMode) {
+      return;
+    }
+
     const libraryMaterials = materials.filter((material) => material.pathwayState?.librarySection === 'active-materials/current-studies/books');
     window.localStorage.setItem(MATERIAL_STORAGE_KEY, JSON.stringify(libraryMaterials));
-  }, [materials]);
+  }, [isDemoMode, materials]);
 
   const createMaterial = (
     pathwayId: PathwayId,
@@ -2864,6 +2883,58 @@ function drawProjectedPath(
   context.restore();
 }
 
+function drawCurvedCartographyPath(
+  context: CanvasRenderingContext2D,
+  points: [SpherePoint, SpherePoint, SpherePoint],
+  rotation: Rotation,
+  center: number,
+  radius: number,
+  color: string,
+  alpha: number,
+  width: number,
+) {
+  const [source, control, target] = points.map((point) => projectPoint(point, rotation, center, radius));
+
+  if (source.depth < 0.2 && target.depth < 0.2) {
+    return;
+  }
+
+  context.save();
+  context.globalAlpha = alpha * Math.max(0.2, (source.depth + target.depth) / 2);
+  context.strokeStyle = color;
+  context.lineWidth = width;
+  context.beginPath();
+  context.moveTo(source.x, source.y);
+  context.quadraticCurveTo(control.x, control.y, target.x, target.y);
+  context.stroke();
+  context.restore();
+}
+
+function interpolateSpherePoint(first: [number, number, number], second: [number, number, number], amount: number) {
+  const x = first[0] * (1 - amount) + second[0] * amount;
+  const y = first[1] * (1 - amount) + second[1] * amount;
+  const z = first[2] * (1 - amount) + second[2] * amount;
+  const length = Math.hypot(x, y, z) || 1;
+
+  return [x / length, y / length, z / length] as [number, number, number];
+}
+
+function cartographyNodeToPoint(node: CartographyNode): SpherePoint {
+  return {
+    char: node.glyph,
+    label: node.title,
+    position: node.position,
+  };
+}
+
+function supportNodeToPoint(node: SupportNode): SpherePoint {
+  return {
+    char: '●',
+    label: node.label,
+    position: node.position,
+  };
+}
+
 type SphereUIProps = {
   isInteractionDisabled?: boolean;
   isDemoMode?: boolean;
@@ -2929,7 +3000,7 @@ export function SphereUI({
     setPathwayInteractionState,
     returnFromPathway,
   } = usePanelArchitecture<PathwayId>(PATHWAY_REGISTRY);
-  const materialLayer = useMaterialRelationshipLayer();
+  const materialLayer = useMaterialRelationshipLayer(isDemoMode);
   const [bookDiscoveryState, setBookDiscoveryState] = useState<BookDiscoveryState>(() => createInitialBookDiscoveryState());
   const [libraryAccounts, setLibraryAccounts] = useState<ConnectedLibraryAccount[]>(() => (
     readLibraryAccountState(isPrototypeLibraryProviderEnabled()).accounts
@@ -2975,6 +3046,9 @@ export function SphereUI({
     height: window.innerHeight,
     width: window.innerWidth,
   }));
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => (
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  ));
   const isStudentSettingsOpen = sphereEnvironmentState !== 'orientation';
   const isSphereInputDisabled = isInteractionDisabled || isStudentSettingsOpen;
   const isPathwayControllingSphere = activePathway !== undefined;
@@ -2989,6 +3063,10 @@ export function SphereUI({
   const relationshipVisibilityMode = getRelationshipVisibilityMode(
     visiblePathwayState,
     panelTrail.some((panel) => panel.level === 'material-view' || panel.level === 'section-view'),
+  );
+  const sphereCartography = useMemo(
+    () => createSphereCartography(materialLayer.materials, materialLayer.relationships),
+    [materialLayer.materials, materialLayer.relationships],
   );
 
   const persistLibraryAccount = (account: ConnectedLibraryAccount) => {
@@ -3126,6 +3204,36 @@ export function SphereUI({
       if (resizeFrame !== null) {
         window.cancelAnimationFrame(resizeFrame);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+
+    if (!media) {
+      return undefined;
+    }
+
+    const updateMotionPreference = () => setPrefersReducedMotion(media.matches);
+    const legacyMedia = media as MediaQueryList & {
+      addListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+      removeListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+    };
+
+    updateMotionPreference();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', updateMotionPreference);
+    } else {
+      legacyMedia.addListener?.(updateMotionPreference);
+    }
+
+    return () => {
+      if (typeof media.removeEventListener === 'function') {
+        media.removeEventListener('change', updateMotionPreference);
+        return;
+      }
+
+      legacyMedia.removeListener?.(updateMotionPreference);
     };
   }, []);
 
@@ -3290,6 +3398,110 @@ export function SphereUI({
       context.restore();
     };
 
+    const drawCartographyRegions = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography) => {
+      context.save();
+
+      cartography.latitudeRegions.slice(0, 7).forEach((region, index) => {
+        const latitude = cartography.latitudeRegions.length <= 1
+          ? 0
+          : -0.72 + (index / (cartography.latitudeRegions.length - 1)) * 1.44;
+        const ringRadius = Math.cos(latitude);
+        const y = Math.sin(latitude);
+        const ringPoints = Array.from({ length: 96 }, (_, step) => {
+          const angle = (step / 95) * Math.PI * 2;
+          return {
+            char: '.',
+            position: [Math.cos(angle) * ringRadius, y, Math.sin(angle) * ringRadius],
+          } as SpherePoint;
+        });
+
+        drawProjectedPath(
+          context,
+          ringPoints,
+          rotation,
+          center,
+          radius * 1.03,
+          '#f0d36a',
+          Math.min(0.42, 0.12 + region.strength * 0.045),
+          Math.max(0.7, size * 0.0018),
+        );
+
+        const labelPoint = projectPoint({
+          char: '.',
+          label: region.label,
+          position: [ringRadius, y, 0],
+        }, rotation, center, radius * 1.06);
+
+        if (labelPoint.depth > 0.48) {
+          drawGlyph(
+            context,
+            `LAT ${region.label.toUpperCase().slice(0, 18)}`,
+            labelPoint.x + size * 0.035,
+            labelPoint.y,
+            '#f0d36a',
+            Math.min(0.72, 0.24 + labelPoint.depth * 0.38),
+            Math.max(7, size * 0.015),
+          );
+        }
+      });
+
+      cartography.longitudeRegions.slice(0, 10).forEach((region, index) => {
+        const longitude = (index / Math.max(1, cartography.longitudeRegions.length)) * Math.PI * 2;
+        const meridianPoints = Array.from({ length: 82 }, (_, step) => {
+          const latitudeAngle = -Math.PI / 2 + (step / 81) * Math.PI;
+          return {
+            char: '.',
+            position: [
+              Math.cos(longitude) * Math.cos(latitudeAngle),
+              Math.sin(latitudeAngle),
+              Math.sin(longitude) * Math.cos(latitudeAngle),
+            ],
+          } as SpherePoint;
+        });
+
+        drawProjectedPath(
+          context,
+          meridianPoints,
+          rotation,
+          center,
+          radius * 1.01,
+          '#35e9ff',
+          Math.min(0.32, 0.09 + region.strength * 0.04),
+          Math.max(0.55, size * 0.0014),
+        );
+      });
+
+      context.restore();
+    };
+
+    const drawCartographyPaths = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography) => {
+      const nodeById = new Map(cartography.nodes.map((node) => [node.id, node]));
+
+      cartography.paths.slice(0, 26).forEach((path) => {
+        const source = nodeById.get(path.sourceId);
+        const target = nodeById.get(path.targetId);
+
+        if (!source || !target) {
+          return;
+        }
+
+        drawCurvedCartographyPath(
+          context,
+          [
+            cartographyNodeToPoint(source),
+            { char: '.', position: path.control },
+            cartographyNodeToPoint(target),
+          ],
+          rotation,
+          center,
+          radius,
+          path.coVisitCount > 1 ? '#f0d36a' : '#21f58a',
+          0.1 + path.strength * 0.34,
+          Math.max(0.7, size * (0.0012 + path.strength * 0.0018)),
+        );
+      });
+    };
+
     const drawSignalNodes = (rotation: Rotation, size: number, center: number, radius: number) => {
       const nodePositions = Array.from({ length: 15 }, (_, index) => {
         const longitude = (index / 15) * Math.PI * 2 + 0.35;
@@ -3334,6 +3546,107 @@ export function SphereUI({
       });
     };
 
+    const drawCartographyNodes = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography) => {
+      const supportPoints = cartography.supportNodes.map(supportNodeToPoint)
+        .map((point, index) => ({
+          index,
+          point,
+          projected: projectPoint(point, rotation, center, radius * 1.07),
+          support: cartography.supportNodes[index],
+        }))
+        .sort((first, second) => first.projected.depth - second.projected.depth);
+
+      for (const entry of supportPoints) {
+        if (entry.projected.depth < 0.34) {
+          continue;
+        }
+
+        const sizeBoost = Math.min(1, entry.support.strength / 5);
+
+        context.save();
+        context.globalAlpha = (0.18 + entry.projected.depth * 0.52) * (0.7 + sizeBoost * 0.3);
+        context.strokeStyle = '#f0d36a';
+        context.lineWidth = Math.max(0.8, size * 0.002);
+        context.beginPath();
+        context.arc(entry.projected.x, entry.projected.y, Math.max(4, size * (0.011 + sizeBoost * 0.006) * entry.projected.scale), 0, Math.PI * 2);
+        context.stroke();
+        context.restore();
+
+        if (entry.index < 5 && entry.projected.depth > 0.56) {
+          drawGlyph(
+            context,
+            `SUPPORT ${entry.support.label.toUpperCase().slice(0, 16)}`,
+            entry.projected.x + size * 0.034,
+            entry.projected.y - size * 0.018,
+            '#f0d36a',
+            0.32 + entry.projected.depth * 0.38,
+            Math.max(7, size * 0.015),
+          );
+        }
+      }
+
+      const materialPoints = cartography.nodes
+        .map((node) => ({
+          node,
+          projected: projectPoint(cartographyNodeToPoint(node), rotation, center, radius * (0.94 + node.density * 0.08)),
+        }))
+        .sort((first, second) => first.projected.depth - second.projected.depth);
+
+      for (const entry of materialPoints) {
+        const { node, projected } = entry;
+
+        if (projected.depth < 0.28) {
+          continue;
+        }
+
+        const pulse = !prefersReducedMotion && node.pulse > 0 ? (Math.sin(performance.now() * 0.004) + 1) * 0.5 * node.pulse : 0;
+        const alpha = Math.min(0.92, (0.18 + projected.depth * 0.54) * node.luminosity + pulse * 0.18);
+        const markRadius = Math.max(3.2, size * (0.008 + node.density * 0.007) * projected.scale);
+
+        context.save();
+        context.globalAlpha = alpha;
+        context.fillStyle = node.color.hue;
+        context.beginPath();
+        context.arc(projected.x, projected.y, markRadius, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+
+        if (node.xMark || node.oMark) {
+          drawGlyph(
+            context,
+            node.xMark ? 'X' : 'O',
+            projected.x - size * 0.018,
+            projected.y + size * 0.018,
+            node.xMark ? '#f0d36a' : '#35e9ff',
+            Math.min(0.84, alpha + 0.18),
+            Math.max(8, size * 0.02 * projected.scale),
+          );
+        }
+
+        drawGlyph(
+          context,
+          node.glyph,
+          projected.x,
+          projected.y,
+          projected.depth > 0.58 ? '#f6f2ea' : node.color.hue,
+          Math.min(0.9, alpha + 0.14),
+          Math.max(8, size * 0.019 * projected.scale),
+        );
+
+        if ((node.engagement.rediscovered || projected.depth > 0.7) && materialPoints.indexOf(entry) % 3 === 0) {
+          drawGlyph(
+            context,
+            node.title.toUpperCase().slice(0, 22),
+            projected.x + size * 0.038,
+            projected.y - size * 0.016,
+            node.color.source === 'declined' ? '#c7beb0' : '#35e9ff',
+            Math.min(0.76, alpha),
+            Math.max(7, size * 0.015),
+          );
+        }
+      }
+    };
+
     const render = () => {
       const size = getResponsiveSphereSize(sizeKey, viewportSize);
       const pixelRatio = window.devicePixelRatio || 1;
@@ -3357,16 +3670,19 @@ export function SphereUI({
       } else if (!dragRef.current.isDragging) {
         velocityRef.current.x *= 0.985;
         velocityRef.current.y *= 0.985;
-        rotation.x += velocityRef.current.x;
-        rotation.y += velocityRef.current.y + 0.0011;
+        rotation.x += prefersReducedMotion ? 0 : velocityRef.current.x;
+        rotation.y += prefersReducedMotion ? 0 : velocityRef.current.y + 0.0011;
       }
 
       context.save();
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       drawWireframe(rotation, size, center, radius);
+      drawCartographyRegions(rotation, size, center, radius, sphereCartography);
       drawSelectionBand(rotation, size, center, radius);
       drawSignalNodes(rotation, size, center, radius);
+      drawCartographyPaths(rotation, size, center, radius, sphereCartography);
+      drawCartographyNodes(rotation, size, center, radius, sphereCartography);
 
       const projectedPoints = points
         .map((point) => projectPoint(point, rotation, center, radius))
@@ -3406,8 +3722,8 @@ export function SphereUI({
       context.setLineDash([]);
 
       drawGlyph(context, 'SELECT SUPPORT NODE', center, size * 0.075, '#35e9ff', 0.78, Math.max(10, size * 0.027));
-      drawGlyph(context, 'SYS SUPPORT // ASCII NAV HUB', center, size * 0.115, '#21f58a', 0.66, Math.max(8, size * 0.018));
-      drawGlyph(context, 'SIGNAL STABLE  ALT 047  NODE ACTIVE', center, size * 0.93, '#f0d36a', 0.64, Math.max(8, size * 0.018));
+      drawGlyph(context, `${sphereCartography.summary.materialCount} MATERIALS // ${sphereCartography.supportNodes.length} SUPPORT NODES`, center, size * 0.115, '#21f58a', 0.66, Math.max(8, size * 0.018));
+      drawGlyph(context, `ARCHIVE RETURNS ${sphereCartography.summary.revisitedCount}  REDISCOVERED ${sphereCartography.summary.rediscoveredCount}`, center, size * 0.93, '#f0d36a', 0.64, Math.max(8, size * 0.018));
       context.restore();
 
       animationRef.current = window.requestAnimationFrame(render);
@@ -3420,7 +3736,7 @@ export function SphereUI({
         window.cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [activePathway, points, sizeKey, viewportSize]);
+  }, [activePathway, points, prefersReducedMotion, sizeKey, sphereCartography, viewportSize]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (isSphereInputDisabled || isPathwayControllingSphere) {
@@ -3466,6 +3782,26 @@ export function SphereUI({
     const currentIndex = ACTIVE_SIZE_KEYS.indexOf(sizeKey);
     const nextIndex = Math.min(ACTIVE_SIZE_KEYS.length - 1, Math.max(0, currentIndex + direction));
     setSizeKey(ACTIVE_SIZE_KEYS[nextIndex]);
+  };
+
+  const handleCanvasKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (isSphereInputDisabled || isPathwayControllingSphere) {
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      const axis = event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'x' : 'y';
+      const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+      rotationRef.current[axis] += direction * 0.08;
+      velocityRef.current = { x: 0, y: 0 };
+    }
+
+    if (event.key === 'Home' || event.key === 'Escape') {
+      event.preventDefault();
+      rotationRef.current = { ...NEUTRAL_ROTATION };
+      velocityRef.current = { x: 0, y: 0 };
+    }
   };
 
   return (
@@ -3525,7 +3861,9 @@ export function SphereUI({
           ref={canvasRef}
           className="ascii-sphere-canvas"
           role="img"
-          aria-label="Rotatable ASCII wireframe support sphere with coordinates, system labels, and data nodes"
+          aria-label={`Rotatable ASCII cartography sphere. ${sphereCartography.summary.materialCount} Library and Archive materials, ${sphereCartography.supportNodes.length} Support Nodes, ${sphereCartography.paths.length} relationship paths. Arrow keys rotate the sphere. Home or Escape recenters it.`}
+          tabIndex={isSphereInputDisabled || isPathwayControllingSphere ? -1 : 0}
+          onKeyDown={handleCanvasKeyDown}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}
@@ -3538,10 +3876,10 @@ export function SphereUI({
       ))}
       {pathwayModels.map((pathway) => (
         <PathwayEntryPanel
-          key={`${pathway.id}-entry`}
-          pathway={pathway}
-          onOpenPathway={() => expandPathway(pathway.id, pathway.sections.length === 0)}
-          onReturnFromOverview={returnOneDepth}
+            key={`${pathway.id}-entry`}
+            pathway={pathway}
+            onOpenPathway={() => expandPathway(pathway.id, pathway.sections.length === 0)}
+            onReturnFromOverview={returnOneDepth}
         />
       ))}
       {pathwayModels.map((pathway) => {

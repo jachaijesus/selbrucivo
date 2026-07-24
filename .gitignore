@@ -14,6 +14,7 @@ __pycache__/
 .venv/
 venv/
 .cache/
+.tmp-tests/
 .metro-cache/
 frontend/.metro-cache/
 coverage/

@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": false,
+    "outDir": ".tmp-tests",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/domain/materials.ts",
+    "src/domain/actions.ts",
+    "src/domain/pathways.ts",
+    "src/domain/relationships.ts",
+    "src/domain/sphereCartography.ts",
+    "src/domain/sphereCartographyFixtures.ts",
+    "src/panelArchitecture.ts"
+  ]
+}
