@@ -762,9 +762,11 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
 }
 
 function PathwayLabel({
+  isSuppressed = false,
   pathway,
   handlers,
 }: {
+  isSuppressed?: boolean;
   pathway: PathwayModel;
   handlers: {
     onMouseEnter: () => void;
@@ -774,17 +776,29 @@ function PathwayLabel({
     onClick: () => void;
   };
 }) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (isSuppressed || (event.key !== 'Enter' && event.key !== ' ')) {
+      return;
+    }
+
+    event.preventDefault();
+    handlers.onClick();
+  };
+
   if (pathway.enabled) {
     return (
       <button
         className={`pathway-label pathway-label-${pathway.position} pathway-trigger ${pathway.id}-pathway-trigger`}
         type="button"
         aria-label={`Select ${pathway.label} pathway`}
+        aria-hidden={isSuppressed}
         aria-pressed={isActivePathwayState(pathway.state)}
         data-pathway-id={pathway.id}
         data-pathway-direction={pathway.direction}
         data-pathway-state={pathway.state}
+        tabIndex={isSuppressed ? -1 : undefined}
         {...handlers}
+        onKeyDown={handleKeyDown}
       >
         {pathway.label}
       </button>
@@ -835,28 +849,49 @@ function PathwayMetadata({ pathway }: { pathway: PathwayModel }) {
 
 function PathwayEntryPanel({
   pathway,
+  previewMaterialTitle,
   onOpenPathway,
   onReturnFromOverview,
 }: {
   pathway: PathwayModel;
+  previewMaterialTitle?: string;
   onOpenPathway: () => void;
   onReturnFromOverview: () => void;
 }) {
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (pathway.state === 'selected') {
+      const focusTimer = window.setTimeout(() => {
+        panelRef.current?.focus({ preventScroll: true });
+      }, 0);
+
+      return () => window.clearTimeout(focusTimer);
+    }
+
+    return undefined;
+  }, [pathway.id, pathway.state]);
+
   if (pathway.state !== 'selected') {
     return null;
   }
 
   return (
-    <aside className={`pathway-entry-panel ${pathway.id}-entry-panel`} aria-label={`${pathway.label} entry metadata`}>
+    <aside
+      ref={panelRef}
+      className={`pathway-entry-panel ${pathway.id}-entry-panel`}
+      aria-label={`${pathway.label} entry metadata`}
+      tabIndex={-1}
+    >
       <span>{pathway.label} SELECTED</span>
-      <span>SPHERE ROTATION: {pathway.direction}</span>
-      <span>ENVIRONMENT: PREPARING</span>
       {pathway.id === 'library' && (
         <div className="pathway-entry-overview-list" aria-label="Library pathway overview">
           <span>Active Study / Current Engagement</span>
-          {pathway.overview.map((item) => <span key={item}>{item}</span>)}
+          <span>{pathway.summary}</span>
+          {previewMaterialTitle && <span>Recent Material: {previewMaterialTitle}</span>}
         </div>
       )}
+      {pathway.id !== 'library' && <span>{pathway.summary}</span>}
       <button className="pathway-action-control" type="button" onClick={onOpenPathway}>
         {pathway.entryAction}
       </button>
@@ -1159,6 +1194,7 @@ function LibraryEnvironmentShell({
   orientation: OrientationSnapshot<PathwayId>;
   pathway: PathwayModel;
 }) {
+  const environmentRef = useRef<HTMLElement>(null);
   const currentStudyBooks = materials.filter((material) => (
     material.currentPathways.includes('library') &&
     material.pathwayState?.librarySection === 'active-materials/current-studies/books'
@@ -1183,10 +1219,20 @@ function LibraryEnvironmentShell({
     }));
   };
 
+  useEffect(() => {
+    const focusTimer = window.setTimeout(() => {
+      environmentRef.current?.focus({ preventScroll: true });
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, []);
+
   return (
     <section
+      ref={environmentRef}
       className={`library-dedicated-environment ${pathway.state === 'returning' ? 'is-returning' : ''}`}
       aria-label="Library environment"
+      tabIndex={-1}
     >
       <div className="library-memory-layer" aria-hidden="true">
         <span>LIB / 021</span>
@@ -1420,7 +1466,6 @@ function PathwayEnvironment({
   const pathwayMaterials = materials.filter((material) => material.currentPathways.includes(pathway.id));
   const activePathwayMaterial = activeMaterial?.currentPathways.includes(pathway.id) ? activeMaterial : undefined;
   const primaryMaterial = activePathwayMaterial?.title || selectedMaterial || pathwayMaterials[0]?.title || selectedSection?.items[0] || 'Selected Material';
-  const primaryAction = pathway.primaryAction;
   const visibleSectionTitles = pathway.materialAreas;
   const actionGroups = pathway.actionGroups.map((groupName) => ({
     groupName,
@@ -1560,10 +1605,6 @@ function PathwayEnvironment({
         <div>
           <span className="pathway-environment-title">{pathway.label}</span>
           <span>{pathway.purpose}</span>
-          <span>Current state: {pathway.state === 'expanded' ? 'Active Material' : pathway.state}</span>
-          <span>Panel depth: {orientation.activeLevel}</span>
-          <span>Return target: {orientation.returnTarget}</span>
-          <span>Primary action: {primaryAction}</span>
         </div>
         <button className="pathway-return-control" type="button" onClick={onReturnFromPathway}>
           Return to {formatPanelLevel(orientation.returnTarget)}
@@ -3049,6 +3090,7 @@ export function SphereUI({
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => (
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   ));
+  const [isCanvasFocused, setIsCanvasFocused] = useState(false);
   const isStudentSettingsOpen = sphereEnvironmentState !== 'orientation';
   const isSphereInputDisabled = isInteractionDisabled || isStudentSettingsOpen;
   const isPathwayControllingSphere = activePathway !== undefined;
@@ -3060,6 +3102,10 @@ export function SphereUI({
     orientation.activeLevel !== 'pathway-overview'
   );
   const activeMaterial = materialLayer.materials.find((material) => material.id === materialLayer.activeMaterialId);
+  const libraryPreviewMaterialTitle = materialLayer.materials.find((material) => (
+    material.currentPathways.includes('library') &&
+    material.pathwayState?.librarySection === 'active-materials/current-studies/books'
+  ))?.title;
   const relationshipVisibilityMode = getRelationshipVisibilityMode(
     visiblePathwayState,
     panelTrail.some((panel) => panel.level === 'material-view' || panel.level === 'section-view'),
@@ -3398,7 +3444,7 @@ export function SphereUI({
       context.restore();
     };
 
-    const drawCartographyRegions = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography) => {
+    const drawCartographyRegions = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography, showLabels: boolean) => {
       context.save();
 
       cartography.latitudeRegions.slice(0, 7).forEach((region, index) => {
@@ -3432,7 +3478,7 @@ export function SphereUI({
           position: [ringRadius, y, 0],
         }, rotation, center, radius * 1.06);
 
-        if (labelPoint.depth > 0.48) {
+        if (showLabels && labelPoint.depth > 0.48) {
           drawGlyph(
             context,
             `LAT ${region.label.toUpperCase().slice(0, 18)}`,
@@ -3502,7 +3548,7 @@ export function SphereUI({
       });
     };
 
-    const drawSignalNodes = (rotation: Rotation, size: number, center: number, radius: number) => {
+    const drawSignalNodes = (rotation: Rotation, size: number, center: number, radius: number, showLabels: boolean) => {
       const nodePositions = Array.from({ length: 15 }, (_, index) => {
         const longitude = (index / 15) * Math.PI * 2 + 0.35;
         const latitude = Math.sin(index * 1.7) * 0.74;
@@ -3532,7 +3578,7 @@ export function SphereUI({
         context.fill();
         context.restore();
 
-        if (index % 3 === 0) {
+        if (showLabels && index % 3 === 0) {
           drawGlyph(
             context,
             `${node.label} ${String((index * 39) % 360).padStart(3, '0')}`,
@@ -3546,7 +3592,7 @@ export function SphereUI({
       });
     };
 
-    const drawCartographyNodes = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography) => {
+    const drawCartographyNodes = (rotation: Rotation, size: number, center: number, radius: number, cartography: SphereCartography, showLabels: boolean) => {
       const supportPoints = cartography.supportNodes.map(supportNodeToPoint)
         .map((point, index) => ({
           index,
@@ -3572,7 +3618,7 @@ export function SphereUI({
         context.stroke();
         context.restore();
 
-        if (entry.index < 5 && entry.projected.depth > 0.56) {
+        if (showLabels && entry.index < 5 && entry.projected.depth > 0.56) {
           drawGlyph(
             context,
             `SUPPORT ${entry.support.label.toUpperCase().slice(0, 16)}`,
@@ -3633,7 +3679,7 @@ export function SphereUI({
           Math.max(8, size * 0.019 * projected.scale),
         );
 
-        if ((node.engagement.rediscovered || projected.depth > 0.7) && materialPoints.indexOf(entry) % 3 === 0) {
+        if (showLabels && (node.engagement.rediscovered || projected.depth > 0.7) && materialPoints.indexOf(entry) % 3 === 0) {
           drawGlyph(
             context,
             node.title.toUpperCase().slice(0, 22),
@@ -3661,6 +3707,8 @@ export function SphereUI({
       const center = size / 2;
       const radius = size * 0.36;
       const rotation = rotationRef.current;
+      const showCartographyInspection = isCanvasFocused && !activePathway;
+      const showCanvasCaption = viewportSize.width > 720 || showCartographyInspection;
 
       if (activePathway) {
         const target = activePathway.state === 'returning' ? NEUTRAL_ROTATION : PATHWAY_ROTATIONS[activePathway.direction];
@@ -3678,11 +3726,11 @@ export function SphereUI({
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       drawWireframe(rotation, size, center, radius);
-      drawCartographyRegions(rotation, size, center, radius, sphereCartography);
+      drawCartographyRegions(rotation, size, center, radius, sphereCartography, showCartographyInspection);
       drawSelectionBand(rotation, size, center, radius);
-      drawSignalNodes(rotation, size, center, radius);
+      drawSignalNodes(rotation, size, center, radius, showCartographyInspection);
       drawCartographyPaths(rotation, size, center, radius, sphereCartography);
-      drawCartographyNodes(rotation, size, center, radius, sphereCartography);
+      drawCartographyNodes(rotation, size, center, radius, sphereCartography, showCartographyInspection);
 
       const projectedPoints = points
         .map((point) => projectPoint(point, rotation, center, radius))
@@ -3700,7 +3748,7 @@ export function SphereUI({
           Math.max(8, size * 0.021 * point.scale),
         );
 
-        if (point.label && point.depth > 0.48) {
+        if (showCartographyInspection && point.label && point.depth > 0.48) {
           drawGlyph(
             context,
             `[${point.label}]`,
@@ -3721,9 +3769,29 @@ export function SphereUI({
       context.stroke();
       context.setLineDash([]);
 
-      drawGlyph(context, 'SELECT SUPPORT NODE', center, size * 0.075, '#35e9ff', 0.78, Math.max(10, size * 0.027));
-      drawGlyph(context, `${sphereCartography.summary.materialCount} MATERIALS // ${sphereCartography.supportNodes.length} SUPPORT NODES`, center, size * 0.115, '#21f58a', 0.66, Math.max(8, size * 0.018));
-      drawGlyph(context, `ARCHIVE RETURNS ${sphereCartography.summary.revisitedCount}  REDISCOVERED ${sphereCartography.summary.rediscoveredCount}`, center, size * 0.93, '#f0d36a', 0.64, Math.max(8, size * 0.018));
+      if (showCanvasCaption) {
+        drawGlyph(context, showCartographyInspection ? 'CARTOGRAPHY INSPECTION' : 'SPHERE CARTOGRAPHY', center, size * 0.075, '#35e9ff', 0.68, Math.max(10, size * 0.027));
+      }
+      if (showCartographyInspection) {
+        drawGlyph(
+          context,
+          `${sphereCartography.summary.materialCount} MATERIALS // ${sphereCartography.supportNodes.length} SUPPORT NODES`,
+          center,
+          size * 0.115,
+          '#21f58a',
+          0.6,
+          Math.max(8, size * 0.018),
+        );
+        drawGlyph(
+          context,
+          `ARCHIVE RETURNS ${sphereCartography.summary.revisitedCount}  REDISCOVERED ${sphereCartography.summary.rediscoveredCount}`,
+          center,
+          size * 0.93,
+          '#f0d36a',
+          0.58,
+          Math.max(8, size * 0.018),
+        );
+      }
       context.restore();
 
       animationRef.current = window.requestAnimationFrame(render);
@@ -3736,7 +3804,7 @@ export function SphereUI({
         window.cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [activePathway, points, prefersReducedMotion, sizeKey, sphereCartography, viewportSize]);
+  }, [activePathway, isCanvasFocused, points, prefersReducedMotion, sizeKey, sphereCartography, viewportSize]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (isSphereInputDisabled || isPathwayControllingSphere) {
@@ -3826,7 +3894,7 @@ export function SphereUI({
         </div>
       )}
 
-      {(!activePathway || isDedicatedLibraryEnvironment) && !isStudentSettingsOpen && (
+      {!isInteractionDisabled && !isStudentSettingsOpen && (
         <ControlCenterDock
           preferences={dockPreferences}
           recentMaterial={materialLayer.lastActiveMaterial}
@@ -3849,6 +3917,7 @@ export function SphereUI({
         {pathwayModels.map((pathway) => (
           <PathwayLabel
             key={pathway.id}
+            isSuppressed={isStudentSettingsOpen || isDedicatedLibraryEnvironment}
             pathway={pathway}
             handlers={getHandlers(pathway)}
           />
@@ -3863,6 +3932,8 @@ export function SphereUI({
           role="img"
           aria-label={`Rotatable ASCII cartography sphere. ${sphereCartography.summary.materialCount} Library and Archive materials, ${sphereCartography.supportNodes.length} Support Nodes, ${sphereCartography.paths.length} relationship paths. Arrow keys rotate the sphere. Home or Escape recenters it.`}
           tabIndex={isSphereInputDisabled || isPathwayControllingSphere ? -1 : 0}
+          onBlur={() => setIsCanvasFocused(false)}
+          onFocus={() => setIsCanvasFocused(true)}
           onKeyDown={handleCanvasKeyDown}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -3878,6 +3949,7 @@ export function SphereUI({
         <PathwayEntryPanel
             key={`${pathway.id}-entry`}
             pathway={pathway}
+            previewMaterialTitle={pathway.id === 'library' ? libraryPreviewMaterialTitle : undefined}
             onOpenPathway={() => expandPathway(pathway.id, pathway.sections.length === 0)}
             onReturnFromOverview={returnOneDepth}
         />
@@ -3954,6 +4026,7 @@ export function SphereUI({
         />
       )}
 
+      {!isStudentSettingsOpen && !isDedicatedLibraryEnvironment && (
       <aside className="ascii-panel" aria-label="Sphere size controls">
         <span className="ascii-panel-label">scale</span>
         <div
@@ -4017,6 +4090,7 @@ export function SphereUI({
           </button>
         )}
       </aside>
+      )}
     </main>
   );
 }

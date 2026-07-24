@@ -215,6 +215,10 @@ button {
   outline-offset: 5px;
 }
 
+.pathway-state-selected .control-center-dock {
+  opacity: 0.72;
+}
+
 .demo-session-badge {
   position: fixed;
   left: var(--frame-edge);
@@ -2323,11 +2327,11 @@ button {
   }
 
   .pathway-label-north {
-    top: clamp(5.6rem, 17vh, 7.4rem);
+    top: clamp(6.4rem, 18vh, 8rem);
   }
 
   .pathway-label-south {
-    bottom: clamp(4.9rem, 14vh, 6.8rem);
+    bottom: clamp(5.5rem, 15vh, 7.1rem);
   }
 
   .pathway-label-east,
@@ -2387,7 +2391,7 @@ button {
     left: 50%;
     right: auto;
     top: auto;
-    bottom: clamp(5.4rem, 13vh, 7.2rem);
+    bottom: clamp(6.2rem, 15vh, 7.8rem);
     width: min(82vw, 18rem);
     text-align: center;
     transform: translateX(-50%);
@@ -2449,7 +2453,7 @@ button {
   }
 
   .ascii-panel {
-    bottom: 14px;
+    bottom: 12px;
     gap: 5px;
   }
 
