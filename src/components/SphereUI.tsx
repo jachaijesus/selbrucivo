@@ -4027,69 +4027,75 @@ export function SphereUI({
       )}
 
       {!isStudentSettingsOpen && !isDedicatedLibraryEnvironment && (
-      <aside className="ascii-panel" aria-label="Sphere size controls">
-        <span className="ascii-panel-label">scale</span>
-        <div
-          className="ascii-size-selector"
-          role="group"
-          aria-label="Support sphere size scale"
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowLeft') {
-              event.preventDefault();
-              shiftSize(-1);
-            }
+        <>
+          <aside className="ascii-panel" aria-label="Sphere size controls">
+            <span className="ascii-panel-label">scale</span>
+            <div
+              className="ascii-size-selector"
+              role="group"
+              aria-label="Support sphere size scale"
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowLeft') {
+                  event.preventDefault();
+                  shiftSize(-1);
+                }
 
-            if (event.key === 'ArrowRight') {
-              event.preventDefault();
-              shiftSize(1);
-            }
-          }}
-        >
-          {SCALE_NODES.map((node, index) => {
-            const selectedIndex = SCALE_NODES.findIndex((item) => item.key === sizeKey);
-            const isFilled = index <= selectedIndex;
+                if (event.key === 'ArrowRight') {
+                  event.preventDefault();
+                  shiftSize(1);
+                }
+              }}
+            >
+              {SCALE_NODES.map((node, index) => {
+                const selectedIndex = SCALE_NODES.findIndex((item) => item.key === sizeKey);
+                const isFilled = index <= selectedIndex;
 
-            return (
-            <button
-              key={node.key}
-              className={[
-                'ascii-size-node',
-                isFilled ? 'is-filled' : '',
-                sizeKey === node.key ? 'is-active' : '',
-                node.enabled ? '' : 'is-postponed',
-              ].join(' ')}
-              type="button"
-              aria-label={node.enabled ? `Set sphere size ${node.key}` : `${node.key} size postponed`}
-              aria-pressed={sizeKey === node.key}
-              disabled={!node.enabled || isInteractionDisabled}
-              onClick={() => setSizeKey(node.key)}
-            />
-            );
-          })}
-        </div>
+                return (
+                  <button
+                    key={node.key}
+                    className={[
+                      'ascii-size-node',
+                      isFilled ? 'is-filled' : '',
+                      sizeKey === node.key ? 'is-active' : '',
+                      node.enabled ? '' : 'is-postponed',
+                    ].join(' ')}
+                    type="button"
+                    aria-label={node.enabled ? `Set sphere size ${node.key}` : `${node.key} size postponed`}
+                    aria-pressed={sizeKey === node.key}
+                    disabled={!node.enabled || isInteractionDisabled}
+                    onClick={() => setSizeKey(node.key)}
+                  />
+                );
+              })}
+            </div>
+          </aside>
 
-        {onResetDemo && (
-          <button
-            className="ascii-return-control demo-reset-control"
-            type="button"
-            disabled={isInteractionDisabled}
-            onClick={onResetDemo}
-          >
-            Reset Demo
-          </button>
-        )}
+          {(onResetDemo || onReturnToThreshold) && (
+            <aside className="ascii-demo-actions" aria-label="Investor demo controls">
+              {onResetDemo && (
+                <button
+                  className="ascii-return-control demo-reset-control"
+                  type="button"
+                  disabled={isInteractionDisabled}
+                  onClick={onResetDemo}
+                >
+                  Reset Demo
+                </button>
+              )}
 
-        {onReturnToThreshold && (
-          <button
-            className="ascii-return-control"
-            type="button"
-            disabled={isInteractionDisabled}
-            onClick={onReturnToThreshold}
-          >
-            Return to Threshold
-          </button>
-        )}
-      </aside>
+              {onReturnToThreshold && (
+                <button
+                  className="ascii-return-control"
+                  type="button"
+                  disabled={isInteractionDisabled}
+                  onClick={onReturnToThreshold}
+                >
+                  Return to Threshold
+                </button>
+              )}
+            </aside>
+          )}
+        </>
       )}
     </main>
   );
