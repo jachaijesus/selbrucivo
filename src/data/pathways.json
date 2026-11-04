@@ -1,0 +1,62 @@
+{
+  "Library": [
+    {
+      "Title": "The Multilayer Nature of Ecological Networks",
+      "Creator": "Shai Pilosof",
+      "Medium": "Academic Paper (arXiv)",
+      "Year": "2015",
+      "Link or location": "http://arxiv.org/abs/1511.04453v3",
+      "Why it's relevant": "Abstract: Although networks provide a powerful approach to study a large variety of ecological systems, their formulation does not typically account f...",
+      "Confidence": "Needs Check"
+    },
+    {
+      "Title": "Deep-learning-powered data analysis in plankton ecology",
+      "Creator": "Harshith Bachimanchi",
+      "Medium": "Academic Paper (arXiv)",
+      "Year": "2023",
+      "Link or location": "http://arxiv.org/abs/2309.08500v1",
+      "Why it's relevant": "Abstract: The implementation of deep learning algorithms has brought new perspectives to plankton ecology. Emerging as an alternative approach to esta...",
+      "Confidence": "Needs Check"
+    }
+  ],
+  "TrainStation": [
+    {
+      "Title": "The Multilayer Nature of Ecological Networks",
+      "Creator": "Shai Pilosof",
+      "Medium": "Academic Paper (arXiv)",
+      "Year": "2015",
+      "Link or location": "http://arxiv.org/abs/1511.04453v3",
+      "Why it's relevant": "Abstract: Although networks provide a powerful approach to study a large variety of ecological systems, their formulation does not typically account f...",
+      "Confidence": "Needs Check",
+      "Decision": "Keep",
+      "Paper": "Ecology Paper",
+      "My note": "The ecological networks discussed here connect to the evolutionary diagram we're building based upon, the lived experinces of collective organisms."
+    },
+    {
+      "Title": "Deep-learning-powered data analysis in plankton ecology",
+      "Creator": "Harshith Bachimanchi",
+      "Medium": "Academic Paper (arXiv)",
+      "Year": "2023",
+      "Link or location": "http://arxiv.org/abs/2309.08500v1",
+      "Why it's relevant": "Abstract: The implementation of deep learning algorithms has brought new perspectives to plankton ecology. Emerging as an alternative approach to esta...",
+      "Confidence": "Needs Check",
+      "Decision": "Maybe",
+      "Paper": "Ecology Paper",
+      "My note": "More research needs to be looked at for how to connect plankton ecology to the paper."
+    }
+  ],
+  "Archive": [
+    {
+      "Title": "The Multilayer Nature of Ecological Networks",
+      "Creator": "Shai Pilosof",
+      "Medium": "Academic Paper (arXiv)",
+      "Year": "2015",
+      "Link or location": "http://arxiv.org/abs/1511.04453v3",
+      "Why it's relevant": "Abstract: Although networks provide a powerful approach to study a large variety of ecological systems, their formulation does not typically account f...",
+      "Confidence": "Needs Check",
+      "Decision": "Keep",
+      "Paper": "Ecology Paper",
+      "My note": "The ecological networks discussed here connect to the evolutionary diagram we're building based upon, the lived experinces of collective organisms."
+    }
+  ]
+}
