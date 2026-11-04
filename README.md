@@ -1,6 +1,6 @@
 # Selbrucivo Prototype
 
-Selbrucivo is a Vite, React, and TypeScript prototype for an interactive learning sphere. The current approved prototype includes the Library environment, Book Material workspaces, Phase 2 external availability routing, and Phase 3 development-safe Connected Library Accounts.
+Selbrucivo is a Vite, React, and TypeScript prototype for an interactive learning sphere. The current approved prototype includes the Golem pathway, Book Material workspaces, Phase 2 external availability routing, and Phase 3 development-safe Connected Library Accounts.
 
 This branch is a read-only architecture-review snapshot for Claude and team review. It is not the production version of Selbrucivo, it contains work-in-progress and unmerged prototype features, and the public application is not yet deployed.
 
@@ -25,7 +25,7 @@ The prototype keeps these domains separate:
 
 - Student identity and app session
 - Sphere and pathway architecture
-- Library environment shell
+- Golem pathway environment shell
 - Book Material identity
 - Student Book relationship state
 - External availability routing
@@ -33,12 +33,14 @@ The prototype keeps these domains separate:
 
 Book discovery identifies `SphereMaterial` and `BookEdition` records. Availability routing identifies external access possibilities through a dedicated service layer under `src/services/availability/`. Connected Library Accounts are modeled separately under `src/services/libraryAccounts/`.
 
+The active pathway IDs are `chrysopoeia`, `golem`, `fafo`, and `essays`. Legacy saved materials using `archive`, `library`, or `train-station` are migrated when loaded.
+
 ## Implemented Prototype Areas
 
 - Sphere orientation and pathway shell
 - Login and Threshold prototype entry
-- Library environment
-- Book discovery and Add to Library
+- Golem pathway environment
+- Book discovery and Add to Golem
 - Saved Book workspace
 - Student relationship persistence
 - Current page and chapter fields

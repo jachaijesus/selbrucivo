@@ -149,6 +149,35 @@ export type SphereMaterial = {
   archiveRecordId?: string;
 };
 
+const LEGACY_PATHWAY_IDS: Record<string, PathwayId> = {
+  archive: 'chrysopoeia',
+  library: 'golem',
+  'train-station': 'fafo',
+};
+
+function migratePathwayId(pathwayId: PathwayId): PathwayId {
+  return LEGACY_PATHWAY_IDS[pathwayId] ?? pathwayId;
+}
+
+export function migrateLegacyPathwayIds(material: SphereMaterial): SphereMaterial {
+  return {
+    ...material,
+    originPathway: migratePathwayId(material.originPathway),
+    currentPathways: material.currentPathways.map(migratePathwayId),
+    routeHistory: material.routeHistory.map((route) => ({
+      ...route,
+      from: migratePathwayId(route.from),
+      to: migratePathwayId(route.to),
+    })),
+    ...(material.pathwayState && {
+      pathwayState: {
+        ...material.pathwayState,
+        currentPathway: migratePathwayId(material.pathwayState.currentPathway),
+      },
+    }),
+  };
+}
+
 export function compactTitle(title: string) {
   return title.replace(/\s*->\s*/g, ' to ');
 }

@@ -1,5 +1,5 @@
 {
-  "Library": [
+  "Golem": [
     {
       "Title": "The Multilayer Nature of Ecological Networks",
       "Creator": "Shai Pilosof",
@@ -19,7 +19,7 @@
       "Confidence": "Needs Check"
     }
   ],
-  "TrainStation": [
+  "FaFo": [
     {
       "Title": "The Multilayer Nature of Ecological Networks",
       "Creator": "Shai Pilosof",
@@ -45,7 +45,7 @@
       "My note": "More research needs to be looked at for how to connect plankton ecology to the paper."
     }
   ],
-  "Archive": [
+  "Chrysopoeia": [
     {
       "Title": "The Multilayer Nature of Ecological Networks",
       "Creator": "Shai Pilosof",

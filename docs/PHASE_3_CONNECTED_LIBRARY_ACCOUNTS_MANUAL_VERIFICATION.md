@@ -28,7 +28,7 @@ The flag is not a secret and must not contain credentials. Production builds omi
 
 ## Connection
 
-- Open `Library -> Connected Libraries`.
+- Open `Golem -> Connected Libraries`.
 - Confirm the prototype notice is visible.
 - Confirm no credential fields are rendered.
 - Review provider capability summaries.
@@ -88,8 +88,8 @@ Then test:
 6. Change to access-limited.
 7. Disconnect account.
 8. Leave the Book.
-9. Leave Library.
-10. Return to Library.
+9. Leave Golem.
+10. Return to Golem.
 11. Return to the Book.
 12. Reload the browser.
 
@@ -105,13 +105,13 @@ Verify student-owned data remains unchanged.
 ## Regression
 
 - Books search still works.
-- Add to Library still works.
+- Add to Golem still works.
 - Phase 2 Access Routes still work.
 - External access handoff still works.
 - Library shell remains stable.
 - Control Center opens and returns.
 - Pathway Overview return works.
 - Sphere behavior remains stable.
-- Other pathways remain unchanged.
+- Chrysopoeia, FaFo, and Essays pathways remain available.
 - Login and Threshold remain unchanged.
 - Production build passes.

@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createSphereCartography } = require('../.tmp-tests/domain/sphereCartography.js');
 const { createDemoSphereMaterials } = require('../.tmp-tests/domain/sphereCartographyFixtures.js');
+const { migrateLegacyPathwayIds } = require('../.tmp-tests/domain/materials.js');
+const { PATHWAY_LABEL_TO_ID, PATHWAY_REGISTRY } = require('../.tmp-tests/domain/pathways.js');
 
 const now = new Date('2026-07-23T00:00:00.000Z');
 
@@ -45,8 +47,8 @@ test('handles missing metadata and empty libraries', () => {
     title: 'Sparse Material',
     kind: 'reference',
     lifecycleStage: 'engagement',
-    originPathway: 'library',
-    currentPathways: ['library'],
+    originPathway: 'golem',
+    currentPathways: ['golem'],
     sourceMaterialIds: [],
     linkedMaterialIds: [],
     routeHistory: [],
@@ -59,4 +61,42 @@ test('handles missing metadata and empty libraries', () => {
   assert.equal(sparse.nodes.length, 1);
   assert.equal(sparse.latitudeRegions[0].value, 'general study');
   assert.equal(sparse.longitudeRegions[0].value, 'engagement');
+});
+
+test('activates the renamed pathway IDs and labels while keeping Essays unchanged', () => {
+  assert.deepEqual(PATHWAY_REGISTRY.map((pathway) => pathway.id), [
+    'chrysopoeia',
+    'golem',
+    'fafo',
+    'essays',
+  ]);
+  assert.equal(PATHWAY_LABEL_TO_ID.Chrysopoeia, 'chrysopoeia');
+  assert.equal(PATHWAY_LABEL_TO_ID.Golem, 'golem');
+  assert.equal(PATHWAY_LABEL_TO_ID.FaFo, 'fafo');
+  assert.equal(PATHWAY_LABEL_TO_ID.Essays, 'essays');
+});
+
+test('migrates saved material pathway references from legacy IDs', () => {
+  const savedMaterial = {
+    ...createDemoSphereMaterials()[0],
+    originPathway: 'library',
+    currentPathways: ['library', 'archive', 'train-station'],
+    pathwayState: {
+      currentPathway: 'library',
+      status: 'active-study',
+    },
+    routeHistory: [{
+      action: 'route',
+      at: '2026-07-20T12:00:00.000Z',
+      from: 'library',
+      to: 'train-station',
+    }],
+  };
+  const migrated = migrateLegacyPathwayIds(savedMaterial);
+
+  assert.equal(migrated.originPathway, 'golem');
+  assert.deepEqual(migrated.currentPathways, ['golem', 'chrysopoeia', 'fafo']);
+  assert.equal(migrated.pathwayState.currentPathway, 'golem');
+  assert.equal(migrated.routeHistory[0].from, 'golem');
+  assert.equal(migrated.routeHistory[0].to, 'fafo');
 });

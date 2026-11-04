@@ -30,7 +30,7 @@ export function openAccessRoute(route: BookAccessRoute, scrollPosition?: number)
     providerId: route.providerId,
     openedAt: new Date().toISOString(),
     returnContext: {
-      pathway: 'library',
+      pathway: 'golem',
       view: 'book-material',
       scrollPosition,
       selectedTab: 'access-routes',

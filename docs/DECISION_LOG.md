@@ -26,7 +26,7 @@ Selbrucivo maintains separation among:
 - Book Material
 - Student Relationship
 
-A connected account must not replace student identity, own notes, create Book identity, erase relationships, imply universal access, or become required for Library use.
+A connected account must not replace student identity, own notes, create Book identity, erase relationships, imply universal access, or become required for Golem use.
 
 ## Book Discovery Versus Availability
 

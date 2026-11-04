@@ -10,6 +10,7 @@ import { getActionGroup, type PathwayAction } from '../domain/actions';
 import {
   compactTitle,
   createMaterialIdentityMetadata,
+  migrateLegacyPathwayIds,
   uniqueValues,
   type LibraryBookRelationshipType,
   type LibraryBookShelfGroup,
@@ -316,7 +317,9 @@ function createInitialMaterials(isDemoMode: boolean) {
   try {
     const stored = window.localStorage.getItem(MATERIAL_STORAGE_KEY);
     const storedMaterials = stored ? JSON.parse(stored) as SphereMaterial[] : [];
-    return storedMaterials.length > 0 ? [...storedMaterials, ...seedMaterials] : seedMaterials;
+    return storedMaterials.length > 0
+      ? [...storedMaterials.map(migrateLegacyPathwayIds), ...seedMaterials]
+      : seedMaterials;
   } catch {
     return seedMaterials;
   }
@@ -440,13 +443,13 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
     }
 
     const source = ensureMaterial(pathwayId, title);
-    const action: RelationshipAction = pathwayId === 'essays' && destinationPathway === 'archive' ? 'preserve' : 'route';
+    const action: RelationshipAction = pathwayId === 'essays' && destinationPathway === 'chrysopoeia' ? 'preserve' : 'route';
     const destinationDefinition = getPathwayDefinition(destinationPathway);
     const routedMaterial: SphereMaterial = {
       ...source,
       currentPathways: uniqueValues([...source.currentPathways, destinationPathway]),
       lifecycleStage: destinationDefinition?.lifecycleStage ?? source.lifecycleStage,
-      kind: destinationPathway === 'archive' ? 'archive-record' : source.kind,
+      kind: destinationPathway === 'chrysopoeia' ? 'archive-record' : source.kind,
       completed: action === 'preserve' ? true : source.completed,
       archivedAt: action === 'preserve' ? new Date().toISOString() : source.archivedAt,
       routeHistory: [...source.routeHistory, createRoute(action, pathwayId, destinationPathway)],
@@ -564,7 +567,7 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
   const saveLibraryBookMaterial = (result: MaterialSearchResult, accessType: LibraryBookRelationshipType) => {
     const externalId = result.identifiers?.externalId ?? result.id;
     const existing = materials.find((material) => (
-      material.currentPathways.includes('library') &&
+      material.currentPathways.includes('golem') &&
       material.pathwayState?.librarySection === 'active-materials/current-studies/books' &&
       (
         material.identifiers?.externalId === externalId ||
@@ -574,7 +577,7 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
     ));
 
     if (existing) {
-      activateMaterial(existing, 'library');
+      activateMaterial(existing, 'golem');
       const now = new Date().toISOString();
       setMaterials((current) => current.map((material) => material.id === existing.id ? {
         ...material,
@@ -598,11 +601,11 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
       kind: 'reference',
       materialType: result.materialType,
       lifecycleStage: 'engagement',
-      originPathway: 'library',
-      currentPathways: ['library'],
+      originPathway: 'golem',
+      currentPathways: ['golem'],
       sourceMaterialIds: [],
       linkedMaterialIds: [],
-      routeHistory: [createRoute('route', 'library', 'library')],
+      routeHistory: [createRoute('route', 'golem', 'golem')],
       parentSection: 'Current Studies / Books',
       source: result.source,
       description: result.description,
@@ -618,7 +621,7 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
         externalId,
       },
       pathwayState: {
-        currentPathway: 'library',
+        currentPathway: 'golem',
         librarySection: 'active-materials/current-studies/books',
         status: 'active-study',
       },
@@ -636,7 +639,7 @@ function useMaterialRelationshipLayer(isDemoMode: boolean) {
     };
 
     setMaterials((current) => [material, ...current]);
-    activateMaterial(material, 'library');
+    activateMaterial(material, 'golem');
     return `${material.title} saved as Active Material.`;
   };
 
@@ -884,14 +887,14 @@ function PathwayEntryPanel({
       tabIndex={-1}
     >
       <span>{pathway.label} SELECTED</span>
-      {pathway.id === 'library' && (
-        <div className="pathway-entry-overview-list" aria-label="Library pathway overview">
+      {pathway.id === 'golem' && (
+        <div className="pathway-entry-overview-list" aria-label="Golem pathway overview">
           <span>Active Study / Current Engagement</span>
           <span>{pathway.summary}</span>
           {previewMaterialTitle && <span>Recent Material: {previewMaterialTitle}</span>}
         </div>
       )}
-      {pathway.id !== 'library' && <span>{pathway.summary}</span>}
+      {pathway.id !== 'golem' && <span>{pathway.summary}</span>}
       <button className="pathway-action-control" type="button" onClick={onOpenPathway}>
         {pathway.entryAction}
       </button>
@@ -1196,10 +1199,10 @@ function LibraryEnvironmentShell({
 }) {
   const environmentRef = useRef<HTMLElement>(null);
   const currentStudyBooks = materials.filter((material) => (
-    material.currentPathways.includes('library') &&
+    material.currentPathways.includes('golem') &&
     material.pathwayState?.librarySection === 'active-materials/current-studies/books'
   ));
-  const activeLibraryMaterial = activeMaterial?.currentPathways.includes('library') ? activeMaterial : undefined;
+  const activeLibraryMaterial = activeMaterial?.currentPathways.includes('golem') ? activeMaterial : undefined;
   const materialTitle = activeLibraryMaterial?.title ?? orientation.activeMaterialId ?? '';
   const isBooksWorkspace = orientation.activeLevel === 'material-view' && (
     orientation.activeSectionId === 'Current Studies' &&
@@ -1231,7 +1234,7 @@ function LibraryEnvironmentShell({
     <section
       ref={environmentRef}
       className={`library-dedicated-environment ${pathway.state === 'returning' ? 'is-returning' : ''}`}
-      aria-label="Library environment"
+      aria-label="Golem environment"
       tabIndex={-1}
     >
       <div className="library-memory-layer" aria-hidden="true">
@@ -1242,7 +1245,7 @@ function LibraryEnvironmentShell({
 
       <header className="library-environment-header" aria-label="Library environment header">
         <button className="library-environment-title-control" type="button" onClick={onReturnToLibraryLanding}>
-          LIBRARY
+          GOLEM
         </button>
         <span className="library-active-material" title={headerMaterial}>{headerMaterial}</span>
         <button className="pathway-return-control library-overview-return" type="button" onClick={onReturnToPathwayOverview}>
@@ -1327,7 +1330,7 @@ function LibraryEnvironmentShell({
         )}
 
         {orientation.activeLevel === 'section-view' && orientation.activeSectionId !== 'Connected Libraries' && (
-          <section className="library-section-workspace" aria-label={`${orientation.activeSectionId ?? 'Library'} section`}>
+          <section className="library-section-workspace" aria-label={`${orientation.activeSectionId ?? 'Golem'} section`}>
             <div className="nested-panel-heading">
               <span className="pathway-section-title">SECTION VIEW</span>
               <span>{orientation.activeSectionId}</span>
@@ -1473,11 +1476,11 @@ function PathwayEnvironment({
   })).filter((group) => group.actions.length > 0);
   const shouldShowRelationships = relationshipVisibilityMode !== 'hidden';
   const currentStudyBooks = materials.filter((material) => (
-    material.currentPathways.includes('library') &&
+    material.currentPathways.includes('golem') &&
     material.pathwayState?.librarySection === 'active-materials/current-studies/books'
   ));
   const isCurrentStudiesBooksView = (
-    pathway.id === 'library' &&
+    pathway.id === 'golem' &&
     orientation.activeLevel === 'material-view' &&
     orientation.activeSectionId === 'Current Studies' &&
     (activePathwayMaterial?.title ?? orientation.activeMaterialId) === 'Books'
@@ -1997,7 +2000,7 @@ function MaterialViewPanel({
   ));
   const materialTitle = activeMaterial?.title ?? orientation.activeMaterialId ?? 'Selected Material';
   const isCurrentStudiesBooksView = (
-    pathway.id === 'library' &&
+    pathway.id === 'golem' &&
     orientation.activeSectionId === 'Current Studies' &&
     materialTitle === 'Books'
   );
@@ -2309,7 +2312,7 @@ function ConnectedLibrariesPanel({
       </section>
 
       <button className="pathway-return-control" type="button" onClick={onReturnToLibrary}>
-        RETURN TO LIBRARY
+        RETURN TO GOLEM
       </button>
     </section>
   );
@@ -2631,7 +2634,7 @@ function BookMaterialInput({
                   ) : (
                     <span>Provider record unavailable</span>
                   )}
-                  <span>Access routes are checked after the Book is saved to Library.</span>
+                  <span>Access routes are checked after the Book is saved to Golem.</span>
                 </div>
               </div>
               {stage === 'material' && (
@@ -2645,7 +2648,7 @@ function BookMaterialInput({
                       status: 'Choose how you are engaging with this Book Material.',
                     }))}
                   >
-                    ADD TO LIBRARY
+                    ADD TO GOLEM
                   </button>
                   <button className="pathway-return-control" type="button" onClick={() => onSetDiscoveryState((current) => ({ ...current, stage: 'results' }))}>
                     RETURN TO RESULTS
@@ -3097,13 +3100,13 @@ export function SphereUI({
   const visiblePathwayState = visiblePathway?.state ?? 'inactive';
   const visiblePathwayClass = visiblePathway ? `${visiblePathway.id}-state-${visiblePathway.state}` : '';
   const isDedicatedLibraryEnvironment = (
-    visiblePathway?.id === 'library' &&
-    orientation.activePathwayId === 'library' &&
+    visiblePathway?.id === 'golem' &&
+    orientation.activePathwayId === 'golem' &&
     orientation.activeLevel !== 'pathway-overview'
   );
   const activeMaterial = materialLayer.materials.find((material) => material.id === materialLayer.activeMaterialId);
   const libraryPreviewMaterialTitle = materialLayer.materials.find((material) => (
-    material.currentPathways.includes('library') &&
+    material.currentPathways.includes('golem') &&
     material.pathwayState?.librarySection === 'active-materials/current-studies/books'
   ))?.title;
   const relationshipVisibilityMode = getRelationshipVisibilityMode(
@@ -3130,7 +3133,7 @@ export function SphereUI({
     provider.beginConnection({
       providerId,
       returnContext: {
-        pathway: 'library',
+        pathway: 'golem',
         view: 'connected-libraries',
         scrollPosition: document.querySelector<HTMLElement>('.library-workspace-scroll')?.scrollTop,
       },
@@ -3203,8 +3206,8 @@ export function SphereUI({
 
   const openLibraryConnectionsFromSettings = () => {
     setSphereEnvironmentState('orientation');
-    expandPathway('library');
-    window.setTimeout(() => enterSection('library', 'Connected Libraries'), 0);
+    expandPathway('golem');
+    window.setTimeout(() => enterSection('golem', 'Connected Libraries'), 0);
   };
 
   const updateDockPreferences = (patch: Partial<StudentDockPreferences>) => {
@@ -3784,7 +3787,7 @@ export function SphereUI({
         );
         drawGlyph(
           context,
-          `ARCHIVE RETURNS ${sphereCartography.summary.revisitedCount}  REDISCOVERED ${sphereCartography.summary.rediscoveredCount}`,
+          `CHRYSOPOEIA RETURNS ${sphereCartography.summary.revisitedCount}  REDISCOVERED ${sphereCartography.summary.rediscoveredCount}`,
           center,
           size * 0.93,
           '#f0d36a',
@@ -3949,13 +3952,13 @@ export function SphereUI({
         <PathwayEntryPanel
             key={`${pathway.id}-entry`}
             pathway={pathway}
-            previewMaterialTitle={pathway.id === 'library' ? libraryPreviewMaterialTitle : undefined}
+            previewMaterialTitle={pathway.id === 'golem' ? libraryPreviewMaterialTitle : undefined}
             onOpenPathway={() => expandPathway(pathway.id, pathway.sections.length === 0)}
             onReturnFromOverview={returnOneDepth}
         />
       ))}
       {pathwayModels.map((pathway) => {
-        if (isDedicatedLibraryEnvironment && pathway.id === 'library') {
+        if (isDedicatedLibraryEnvironment && pathway.id === 'golem') {
           return null;
         }
 
@@ -3998,7 +4001,7 @@ export function SphereUI({
         );
       })}
 
-      {isDedicatedLibraryEnvironment && visiblePathway?.id === 'library' && (
+      {isDedicatedLibraryEnvironment && visiblePathway?.id === 'golem' && (
         <LibraryEnvironmentShell
           pathway={visiblePathway}
           activeMaterial={activeMaterial}
@@ -4013,13 +4016,13 @@ export function SphereUI({
           onCancelLibraryAccountConnection={cancelLibraryAccountConnection}
           onDeclineLibraryAccountConnection={declineLibraryAccountConnection}
           onDisconnectLibraryAccount={disconnectLibraryAccount}
-          onEnterMaterial={(materialId, sectionId) => enterMaterial('library', materialId, sectionId)}
-          onEnterSection={(sectionId) => enterSection('library', sectionId)}
+          onEnterMaterial={(materialId, sectionId) => enterMaterial('golem', materialId, sectionId)}
+          onEnterSection={(sectionId) => enterSection('golem', sectionId)}
           onReturnOneDepth={returnOneDepth}
-          onReturnToLibraryLanding={() => expandPathway('library')}
-          onReturnToPathwayOverview={() => returnToPathwayOverview('library')}
+          onReturnToLibraryLanding={() => expandPathway('golem')}
+          onReturnToPathwayOverview={() => returnToPathwayOverview('golem')}
           onSaveLibraryBookMaterial={materialLayer.saveLibraryBookMaterial}
-          onSelectMaterial={(materialId) => materialLayer.activateMaterialById('library', materialId)}
+          onSelectMaterial={(materialId) => materialLayer.activateMaterialById('golem', materialId)}
           onSetDiscoveryState={setBookDiscoveryState}
           onSetPrototypeLibraryAccountStatus={setPrototypeLibraryAccountStatus}
           onUpdateLibraryBookRelationship={materialLayer.updateLibraryBookRelationship}

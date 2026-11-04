@@ -71,7 +71,7 @@ export type ConnectedLibraryAccount = {
 export type LibraryAccountConnectionContext = {
   providerId: string;
   returnContext: {
-    pathway: 'library';
+    pathway: 'golem';
     view: 'connected-libraries';
     scrollPosition?: number;
   };

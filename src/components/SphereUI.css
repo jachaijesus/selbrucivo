@@ -512,24 +512,24 @@ button {
   text-shadow: 0 0 8px rgba(53, 233, 255, 0.08);
 }
 
-.archive-state-selected .pathway-label-north,
-.archive-state-expanded .pathway-label-north,
-.archive-state-routing .pathway-label-north,
-.archive-state-holding .pathway-label-north {
+.chrysopoeia-state-selected .pathway-label-north,
+.chrysopoeia-state-expanded .pathway-label-north,
+.chrysopoeia-state-routing .pathway-label-north,
+.chrysopoeia-state-holding .pathway-label-north {
   transform: translateX(-50%) translateY(-0.4rem);
 }
 
-.library-state-selected .pathway-label-south,
-.library-state-expanded .pathway-label-south,
-.library-state-routing .pathway-label-south,
-.library-state-holding .pathway-label-south {
+.golem-state-selected .pathway-label-south,
+.golem-state-expanded .pathway-label-south,
+.golem-state-routing .pathway-label-south,
+.golem-state-holding .pathway-label-south {
   transform: translateX(-50%) translateY(0.4rem);
 }
 
-.train-station-state-selected .pathway-label-east,
-.train-station-state-expanded .pathway-label-east,
-.train-station-state-routing .pathway-label-east,
-.train-station-state-holding .pathway-label-east {
+.fafo-state-selected .pathway-label-east,
+.fafo-state-expanded .pathway-label-east,
+.fafo-state-routing .pathway-label-east,
+.fafo-state-holding .pathway-label-east {
   transform: translateY(-50%) translateX(0.4rem);
 }
 
@@ -544,18 +544,18 @@ button {
   transform: translateY(-50%) translateX(-0.4rem);
 }
 
-.library-pathway-trigger[data-pathway-state="hover"],
-.library-pathway-trigger[data-pathway-state="focused"] {
+.golem-pathway-trigger[data-pathway-state="hover"],
+.golem-pathway-trigger[data-pathway-state="focused"] {
   color: rgba(222, 255, 246, 0.84);
   text-shadow:
     0 0 14px rgba(53, 233, 255, 0.38),
     0 0 30px rgba(33, 245, 138, 0.2);
 }
 
-.library-pathway-trigger[data-pathway-state="selected"],
-.library-pathway-trigger[data-pathway-state="expanded"],
-.library-pathway-trigger[data-pathway-state="routing"],
-.library-pathway-trigger[data-pathway-state="holding"] {
+.golem-pathway-trigger[data-pathway-state="selected"],
+.golem-pathway-trigger[data-pathway-state="expanded"],
+.golem-pathway-trigger[data-pathway-state="routing"],
+.golem-pathway-trigger[data-pathway-state="holding"] {
   color: rgba(225, 252, 242, 0.92);
   text-shadow:
     0 0 16px rgba(53, 233, 255, 0.34),
@@ -563,18 +563,18 @@ button {
     0 0 18px rgba(240, 211, 106, 0.16);
 }
 
-.train-station-pathway-trigger[data-pathway-state="hover"],
-.train-station-pathway-trigger[data-pathway-state="focused"] {
+.fafo-pathway-trigger[data-pathway-state="hover"],
+.fafo-pathway-trigger[data-pathway-state="focused"] {
   color: rgba(224, 246, 238, 0.82);
   text-shadow:
     0 0 14px rgba(240, 211, 106, 0.26),
     0 0 28px rgba(53, 233, 255, 0.18);
 }
 
-.train-station-pathway-trigger[data-pathway-state="selected"],
-.train-station-pathway-trigger[data-pathway-state="expanded"],
-.train-station-pathway-trigger[data-pathway-state="routing"],
-.train-station-pathway-trigger[data-pathway-state="holding"] {
+.fafo-pathway-trigger[data-pathway-state="selected"],
+.fafo-pathway-trigger[data-pathway-state="expanded"],
+.fafo-pathway-trigger[data-pathway-state="routing"],
+.fafo-pathway-trigger[data-pathway-state="holding"] {
   color: rgba(239, 230, 176, 0.92);
   text-shadow:
     0 0 16px rgba(240, 211, 106, 0.3),
@@ -587,6 +587,10 @@ button {
   text-shadow:
     0 0 14px rgba(240, 211, 106, 0.24),
     0 0 28px rgba(118, 87, 155, 0.22);
+}
+
+.fafo-pathway-trigger {
+  text-transform: none;
 }
 
 .essays-pathway-trigger[data-pathway-state="selected"],
@@ -649,33 +653,33 @@ button {
   opacity: 0.72;
 }
 
-.library-state-hover .ascii-sphere-canvas,
-.library-state-focused .ascii-sphere-canvas {
+.golem-state-hover .ascii-sphere-canvas,
+.golem-state-focused .ascii-sphere-canvas {
   filter:
     drop-shadow(0 0 22px rgba(33, 245, 138, 0.38))
     drop-shadow(0 0 48px rgba(53, 233, 255, 0.2));
 }
 
-.library-state-selected .ascii-sphere-canvas,
-.library-state-expanded .ascii-sphere-canvas,
-.library-state-routing .ascii-sphere-canvas,
-.library-state-holding .ascii-sphere-canvas {
+.golem-state-selected .ascii-sphere-canvas,
+.golem-state-expanded .ascii-sphere-canvas,
+.golem-state-routing .ascii-sphere-canvas,
+.golem-state-holding .ascii-sphere-canvas {
   filter:
     drop-shadow(0 0 24px rgba(53, 233, 255, 0.24))
     drop-shadow(0 0 52px rgba(33, 245, 138, 0.18));
 }
 
-.train-station-state-hover .ascii-sphere-canvas,
-.train-station-state-focused .ascii-sphere-canvas {
+.fafo-state-hover .ascii-sphere-canvas,
+.fafo-state-focused .ascii-sphere-canvas {
   filter:
     drop-shadow(0 0 20px rgba(240, 211, 106, 0.26))
     drop-shadow(0 0 44px rgba(53, 233, 255, 0.16));
 }
 
-.train-station-state-selected .ascii-sphere-canvas,
-.train-station-state-expanded .ascii-sphere-canvas,
-.train-station-state-routing .ascii-sphere-canvas,
-.train-station-state-holding .ascii-sphere-canvas {
+.fafo-state-selected .ascii-sphere-canvas,
+.fafo-state-expanded .ascii-sphere-canvas,
+.fafo-state-routing .ascii-sphere-canvas,
+.fafo-state-holding .ascii-sphere-canvas {
   filter:
     drop-shadow(0 0 24px rgba(240, 211, 106, 0.24))
     drop-shadow(0 0 52px rgba(53, 233, 255, 0.16));
@@ -752,16 +756,16 @@ button {
   color: rgba(240, 211, 106, 0.7);
 }
 
-.library-metadata {
+.golem-metadata {
   top: auto;
   bottom: clamp(6.4rem, 18vh, 10.5rem);
 }
 
-.library-metadata .pathway-meta-focus {
+.golem-metadata .pathway-meta-focus {
   color: rgba(213, 251, 244, 0.74);
 }
 
-.train-station-metadata {
+.fafo-metadata {
   left: auto;
   right: var(--frame-edge);
   top: 50%;
@@ -771,7 +775,7 @@ button {
   animation: train-station-signal-arrival 260ms ease both;
 }
 
-.train-station-metadata .pathway-meta-focus {
+.fafo-metadata .pathway-meta-focus {
   color: rgba(239, 230, 176, 0.72);
 }
 
@@ -798,7 +802,7 @@ button {
   animation: pathway-entry-arrival 360ms ease both;
 }
 
-.library-entry-panel {
+.golem-entry-panel {
   left: var(--frame-edge);
   right: auto;
 }
@@ -814,7 +818,7 @@ button {
   color: rgba(240, 211, 106, 0.72);
 }
 
-.train-station-entry-panel {
+.fafo-entry-panel {
   left: var(--frame-edge);
   right: auto;
 }
@@ -1776,7 +1780,7 @@ button {
   }
 }
 
-.train-station-environment {
+.fafo-environment {
   max-height: min(36vh, 24rem);
   border-top-color: rgba(240, 211, 106, 0.24);
   background:
@@ -2224,7 +2228,7 @@ button {
     left: var(--app-gutter);
   }
 
-  .train-station-metadata,
+  .fafo-metadata,
   .essays-metadata {
     left: 50%;
     right: auto;
@@ -2236,8 +2240,8 @@ button {
   }
 
   .pathway-entry-panel,
-  .library-entry-panel,
-  .train-station-entry-panel,
+  .golem-entry-panel,
+  .fafo-entry-panel,
   .essays-entry-panel {
     left: 50%;
     right: auto;
@@ -2385,7 +2389,7 @@ button {
     font-size: 0.56rem;
   }
 
-  .train-station-metadata,
+  .fafo-metadata,
   .essays-metadata {
     left: 50%;
     right: auto;

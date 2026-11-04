@@ -133,7 +133,7 @@ export type AccessHandoff = {
   providerId: string;
   openedAt: string;
   returnContext: {
-    pathway: 'library';
+    pathway: 'golem';
     view: 'book-material';
     scrollPosition?: number;
     selectedTab?: string;

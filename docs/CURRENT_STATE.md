@@ -66,15 +66,17 @@ Primary areas:
 - Threshold and Login prototype entry
 - Interactive Sphere orientation
 - Pathway Overview
-- Library environment shell
-- Books search and Add to Library
+- Golem pathway environment shell
+- Books search and Add to Golem
 - Saved Book workspace
 - Student Book relationship controls
 - Current page and chapter tracking
 - Notes, highlights, citations, and relationship objects
 - Access Routes inside saved Book workspaces
-- Connected Libraries section inside Library
+- Connected Libraries section inside Golem
 - Minimal Control Center navigation entry to Library Connections
+
+The active pathway IDs are `chrysopoeia`, `golem`, `fafo`, and `essays`. Materials saved with the previous `archive`, `library`, and `train-station` pathway IDs are migrated on load.
 
 ## Phase 2 Availability
 

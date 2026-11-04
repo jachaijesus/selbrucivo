@@ -322,8 +322,8 @@ export function createSphereCartography(
   options: { now?: Date } = {},
 ): SphereCartography {
   const libraryMaterials = materials.filter((material) => (
-    material.currentPathways.includes('library') ||
-    material.currentPathways.includes('archive') ||
+    material.currentPathways.includes('golem') ||
+    material.currentPathways.includes('chrysopoeia') ||
     material.pathwayState?.librarySection === 'active-materials/current-studies/books'
   ));
 

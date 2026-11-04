@@ -51,9 +51,9 @@ export type OrientationDisciplineId =
   | 'finance';
 
 export type OrientationWorkspaceComponent =
-  | 'Archive'
-  | 'Library'
-  | 'Train Station'
+  | 'Chrysopoeia'
+  | 'Golem'
+  | 'FaFo'
   | 'Essays'
   | 'Radio'
   | 'Observatory'
@@ -102,9 +102,9 @@ export const ORIENTATION_STEPS: OrientationStep[] = [
 ];
 
 export const ORIENTATION_WORKSPACE_COMPONENTS: OrientationWorkspaceComponent[] = [
-  'Archive',
-  'Library',
-  'Train Station',
+  'Chrysopoeia',
+  'Golem',
+  'FaFo',
   'Essays',
   'Radio',
   'Observatory',
@@ -113,19 +113,19 @@ export const ORIENTATION_WORKSPACE_COMPONENTS: OrientationWorkspaceComponent[] =
 ];
 
 export const ORIENTATION_PRACTICES: OrientationPracticeOption[] = [
-  { id: 'study-intentionally', label: 'Study Intentionally', supports: ['Library', 'Archive', 'Train Station'] },
-  { id: 'expand-creative-knowledge', label: 'Expand Creative Knowledge', supports: ['Library', 'Studio', 'Observatory'] },
-  { id: 'prepare-for-school', label: 'Prepare for School', supports: ['Train Station', 'Library', 'Essays'] },
-  { id: 'ask-better-questions', label: 'Ask Better Questions', supports: ['Observatory', 'Library', 'Archive'] },
-  { id: 'reflect-on-experiences', label: 'Reflect on Experiences', supports: ['Essays', 'Archive', 'Radio'] },
-  { id: 'research-myself', label: 'Research Myself', supports: ['Archive', 'Observatory', 'Essays'] },
-  { id: 'write-consistently', label: 'Write Consistently', supports: ['Essays', 'Library', 'Archive'] },
-  { id: 'practice-illustration', label: 'Practice Illustration', supports: ['Studio', 'Workshop', 'Library'] },
-  { id: 'build-design-systems', label: 'Build Design Systems', supports: ['Workshop', 'Studio', 'Archive'] },
-  { id: 'organize-research', label: 'Organize Research', supports: ['Archive', 'Library', 'Train Station'] },
+  { id: 'study-intentionally', label: 'Study Intentionally', supports: ['Golem', 'Chrysopoeia', 'FaFo'] },
+  { id: 'expand-creative-knowledge', label: 'Expand Creative Knowledge', supports: ['Golem', 'Studio', 'Observatory'] },
+  { id: 'prepare-for-school', label: 'Prepare for School', supports: ['FaFo', 'Golem', 'Essays'] },
+  { id: 'ask-better-questions', label: 'Ask Better Questions', supports: ['Observatory', 'Golem', 'Chrysopoeia'] },
+  { id: 'reflect-on-experiences', label: 'Reflect on Experiences', supports: ['Essays', 'Chrysopoeia', 'Radio'] },
+  { id: 'research-myself', label: 'Research Myself', supports: ['Chrysopoeia', 'Observatory', 'Essays'] },
+  { id: 'write-consistently', label: 'Write Consistently', supports: ['Essays', 'Golem', 'Chrysopoeia'] },
+  { id: 'practice-illustration', label: 'Practice Illustration', supports: ['Studio', 'Workshop', 'Golem'] },
+  { id: 'build-design-systems', label: 'Build Design Systems', supports: ['Workshop', 'Studio', 'Chrysopoeia'] },
+  { id: 'organize-research', label: 'Organize Research', supports: ['Chrysopoeia', 'Golem', 'FaFo'] },
   { id: 'develop-visual-thinking', label: 'Develop Visual Thinking', supports: ['Studio', 'Observatory', 'Workshop'] },
-  { id: 'teach-others', label: 'Teach Others', supports: ['Library', 'Radio', 'Train Station'] },
-  { id: 'curate-curriculums', label: 'Curate Curriculums', supports: ['Library', 'Archive', 'Train Station'] },
+  { id: 'teach-others', label: 'Teach Others', supports: ['Golem', 'Radio', 'FaFo'] },
+  { id: 'curate-curriculums', label: 'Curate Curriculums', supports: ['Golem', 'Chrysopoeia', 'FaFo'] },
 ];
 
 export const ORIENTATION_DISCIPLINE_GROUPS: OrientationDisciplineGroup[] = [
@@ -230,7 +230,7 @@ export function prepareOrientationEnvironment(profile: Pick<OrientationProfile, 
   const practiceComponents = profile.practices.flatMap((practiceId) => (
     ORIENTATION_PRACTICES.find((practice) => practice.id === practiceId)?.supports ?? []
   ));
-  const visible = uniqueComponents(['Archive', 'Library', ...practiceComponents]).slice(0, 5);
+  const visible = uniqueComponents(['Chrysopoeia', 'Golem', ...practiceComponents]).slice(0, 5);
   const disciplineContext = profile.disciplines.length > 0
     ? `${profile.disciplines.map(getDisciplineLabel).slice(0, 3).join(' / ')} context`
     : 'general study context';
@@ -239,7 +239,7 @@ export function prepareOrientationEnvironment(profile: Pick<OrientationProfile, 
     allComponents: ORIENTATION_WORKSPACE_COMPONENTS,
     initialVisible: visible,
     rationale: [
-      'Archive and Library remain visible as common reference ground.',
+      'Chrysopoeia and Golem remain visible as common reference ground.',
       profile.practices.length > 0
         ? 'Declared practices bring forward a smaller first set of pathways.'
         : 'No practice has been declared yet; the environment remains broadly open.',
@@ -278,7 +278,7 @@ export function createInvestorDemoSignupProtocolState(): OrientationState {
   const disciplines: OrientationDisciplineId[] = ['writing', 'interior-design'];
   const environment: OrientationEnvironment = {
     ...prepareOrientationEnvironment({ identity, practices, disciplines }),
-    initialVisible: ['Archive', 'Library', 'Train Station', 'Essays'],
+    initialVisible: ['Chrysopoeia', 'Golem', 'FaFo', 'Essays'],
   };
 
   return {

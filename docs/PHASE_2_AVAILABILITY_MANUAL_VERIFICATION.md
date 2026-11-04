@@ -67,7 +67,7 @@ WorldCat and OverDrive are disabled adapter boundaries. They must remain unconfi
 ## Regression
 
 - Search still works.
-- Add to Library still works.
+- Add to Golem still works.
 - Shelf persists.
 - Current page persists.
 - Notes persist.

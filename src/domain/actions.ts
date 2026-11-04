@@ -49,9 +49,9 @@ export type ActionHandlerKey =
   | 'complete';
 
 export const ACTION_GROUPS: Record<PathwayId, ActionGroupName[]> = {
-  archive: ['Preserve', 'Annotate', 'Link', 'Retrieve'],
-  library: ['Open', 'Study', 'Sort', 'Preserve / Link'],
-  'train-station': ['Capture', 'Hold', 'Route', 'Return'],
+  chrysopoeia: ['Preserve', 'Annotate', 'Link', 'Retrieve'],
+  golem: ['Open', 'Study', 'Sort', 'Preserve / Link'],
+  fafo: ['Capture', 'Hold', 'Route', 'Return'],
   essays: ['Compose', 'Revise', 'Link', 'Preserve'],
 };
 
